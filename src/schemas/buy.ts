@@ -5,11 +5,12 @@ export const BuyRequestSchema = z
 	.object({
 		productUrl: z.string().url().optional().openapi({
 			example: "https://amazon.com/dp/B0CXYZ1234",
-			description: "Amazon or Shopify product URL",
+			description:
+				"Product URL. For Amazon: https://amazon.com/dp/ASIN. For Shopify: https://store.com/products/item-name (requires variantId)",
 		}),
 		asin: z.string().optional().openapi({
 			example: "B0CXYZ1234",
-			description: "Amazon ASIN (alternative to productUrl)",
+			description: "Amazon ASIN (10-character code). Use this OR productUrl for Amazon products",
 		}),
 		shippingAddress: ShippingAddressSchema,
 		email: z.string().email().openapi({
@@ -22,7 +23,7 @@ export const BuyRequestSchema = z
 		}),
 		variantId: z.string().optional().openapi({
 			example: "41913945718867",
-			description: "Variant ID for Shopify products",
+			description: "Required for Shopify products. The specific variant ID from the product",
 		}),
 	})
 	.refine((data) => data.productUrl || data.asin, {
