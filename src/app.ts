@@ -64,10 +64,7 @@ AI-powered shopping API for product search and checkout.
 			url: "https://purch.ing",
 		},
 	},
-	servers: [
-		{ url: "https://api.purch.ing", description: "Production" },
-		{ url: "http://localhost:8080", description: "Local development" },
-	],
+	servers: [{ url: "https://api.purch.xyz", description: "Production" }],
 	tags: [
 		{ name: "Search", description: "Product search endpoints" },
 		{ name: "Shop", description: "AI-powered shopping assistant" },
