@@ -79,8 +79,17 @@ class PurchClient {
 		});
 
 		if (!response.ok) {
-			const error = (await response.json().catch(() => ({}))) as { message?: string };
-			throw new Error(`Purch API error: ${response.status} - ${error.message ?? "Unknown error"}`);
+			const error = (await response.json().catch(() => ({}))) as {
+				message?: string;
+				error?: string;
+				code?: string;
+				details?: unknown;
+			};
+			const message = error.error || error.message || "Unknown error";
+			const apiError = new Error(message) as Error & { status: number; code?: string };
+			apiError.status = response.status;
+			apiError.code = error.code;
+			throw apiError;
 		}
 
 		return response.json() as Promise<T>;
