@@ -10,8 +10,19 @@ const buyRoute = createRoute({
 	path: "/",
 	tags: ["Buy"],
 	summary: "One-command checkout",
-	description: `Create a purchase order for a product. Provide either a product URL or ASIN along with shipping details and wallet address.
+	description: `Create a purchase order for a product.
 
+## Amazon Products
+Use **either**:
+- \`asin\` - The Amazon ASIN (e.g., \`B0CXYZ1234\`)
+- \`productUrl\` - Amazon product URL (e.g., \`https://amazon.com/dp/B0CXYZ1234\`)
+
+## Shopify Products
+Use **both**:
+- \`productUrl\` - Shopify product URL (e.g., \`https://store.com/products/item-name\`)
+- \`variantId\` - The specific variant ID (e.g., \`41913945718867\`)
+
+## Response
 Returns a serialized Solana transaction that must be signed by the wallet to complete the purchase.`,
 	request: {
 		body: {
