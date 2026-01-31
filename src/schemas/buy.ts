@@ -17,9 +17,10 @@ export const BuyRequestSchema = z
 			example: "john@example.com",
 			description: "Email for order confirmation",
 		}),
-		walletAddress: z.string().min(32).max(64).openapi({
+		walletAddress: z.string().openapi({
 			example: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
-			description: "Solana wallet address for payment",
+			description:
+				"Wallet address for payment. Solana (base58) or Base/EVM (0x...). Chain is auto-detected from format.",
 		}),
 		variantId: z.string().optional().openapi({
 			example: "41913945718867",
@@ -29,6 +30,20 @@ export const BuyRequestSchema = z
 	.refine((data) => data.productUrl || data.asin, {
 		message: "Either productUrl or asin is required",
 	})
+	.refine(
+		(data) => {
+			const wallet = data.walletAddress;
+			// EVM address: 0x + 40 hex chars
+			const isEvm = /^0x[a-fA-F0-9]{40}$/.test(wallet);
+			// Solana address: 32-44 base58 chars
+			const isSolana = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet);
+			return isEvm || isSolana;
+		},
+		{
+			message: "Invalid wallet address. Must be Solana (base58) or EVM (0x...)",
+			path: ["walletAddress"],
+		},
+	)
 	.openapi("BuyRequest");
 
 export const BuyResponseSchema = z

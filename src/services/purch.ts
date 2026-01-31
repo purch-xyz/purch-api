@@ -122,9 +122,15 @@ class PurchClient {
 
 	/**
 	 * Create a purchase order for a product.
+	 * Auto-detects chain from wallet address format:
+	 * - 0x... = Base (EVM)
+	 * - base58 = Solana
 	 */
 	async buy(params: BuyParams): Promise<BuyResult> {
-		return this.request<BuyResult>("/api/public/orders", {
+		const isEvmWallet = /^0x[a-fA-F0-9]{40}$/.test(params.walletAddress);
+		const endpoint = isEvmWallet ? "/api/public/orders/base" : "/api/public/orders";
+
+		return this.request<BuyResult>(endpoint, {
 			method: "POST",
 			body: JSON.stringify(params),
 		});
