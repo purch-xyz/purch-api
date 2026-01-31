@@ -61,7 +61,7 @@ AI-powered shopping API for product search and checkout.
 `,
 		contact: {
 			name: "Purch Support",
-			url: "https://purch.ing",
+			url: "https://purch.xyz",
 		},
 	},
 	servers: [{ url: "https://api.purch.xyz", description: "Production" }],
