@@ -24,26 +24,34 @@ app.get("/health", (c) =>
 	}),
 );
 
-// Rate limiting for API routes (60 req/min per IP)
+// Rate limiting for open API routes (60 req/min per IP)
 app.use("/search/*", rateLimit({ windowMs: 60 * 1000, maxRequests: 60 }));
 app.use("/shop/*", rateLimit({ windowMs: 60 * 1000, maxRequests: 60 }));
 app.use("/buy/*", rateLimit({ windowMs: 60 * 1000, maxRequests: 60 }));
 
-// x402 payable middleware — returns 402 when no X-PAYMENT header
+// x402 rate limiting (60 req/min per IP)
+app.use("/x402/*", rateLimit({ windowMs: 60 * 1000, maxRequests: 60 }));
+
+// x402 payable middleware — returns 402 when no X-PAYMENT header (only on /x402/* routes)
 for (const route of PAYABLE_ROUTES) {
 	app.use(`${route.path}/*`, x402PayableMiddleware(route));
 }
 
-// GET probe handlers for POST-only routes (x402scan probes both GET and POST)
-const shopRoute = PAYABLE_ROUTES.find((r) => r.path === "/shop")!;
-const buyRoute = PAYABLE_ROUTES.find((r) => r.path === "/buy")!;
-app.get("/shop", (c) => handle402Probe(c, shopRoute));
-app.get("/buy", (c) => handle402Probe(c, buyRoute));
+// GET probe handlers for POST-only x402 routes (x402scan probes both GET and POST)
+const shopRoute = PAYABLE_ROUTES.find((r) => r.path === "/x402/shop")!;
+const buyRoute = PAYABLE_ROUTES.find((r) => r.path === "/x402/buy")!;
+app.get("/x402/shop", (c) => handle402Probe(c, shopRoute));
+app.get("/x402/buy", (c) => handle402Probe(c, buyRoute));
 
-// API routes
+// Open routes (partners — no x402 gate)
 app.route("/search", searchRouter);
 app.route("/shop", shopRouter);
 app.route("/buy", buyRouter);
+
+// x402 routes (AI agents — gated by x402 middleware above)
+app.route("/x402/search", searchRouter);
+app.route("/x402/shop", shopRouter);
+app.route("/x402/buy", buyRouter);
 
 // Custom OpenAPI spec with x402 extensions
 app.get("/openapi.json", (c) => {
@@ -66,9 +74,9 @@ Without it, the API returns a \`402 Payment Required\` response with payment ins
 
 | Endpoint | Price | Description |
 |----------|-------|-------------|
-| \`GET /search\` | $0.01 | Structured product search with filters |
-| \`POST /shop\` | $0.10 | Natural language AI shopping assistant |
-| \`POST /buy\` | $0.01 | Create a purchase order |
+| \`GET /x402/search\` | $0.01 | Structured product search with filters |
+| \`POST /x402/shop\` | $0.10 | Natural language AI shopping assistant |
+| \`POST /x402/buy\` | $0.01 | Create a purchase order |
 `,
 			contact: {
 				name: "Purch Support",
@@ -85,6 +93,15 @@ Without it, the API returns a \`402 Payment Required\` response with payment ins
 
 	// Get the auto-generated OpenAPI document with full Zod schemas
 	const spec = app.getOpenAPIDocument(baseConfig);
+
+	// Filter: only expose /x402/* paths in OpenAPI spec
+	if (spec.paths) {
+		for (const path of Object.keys(spec.paths)) {
+			if (!path.startsWith("/x402/")) {
+				delete spec.paths[path];
+			}
+		}
+	}
 
 	// Add x402 security scheme
 	if (!spec.components) spec.components = {};

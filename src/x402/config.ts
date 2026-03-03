@@ -23,7 +23,7 @@ export interface PayableRoute {
 
 export const PAYABLE_ROUTES: PayableRoute[] = [
 	{
-		path: "/shop",
+		path: "/x402/shop",
 		method: "POST",
 		price: "0.10",
 		description: "AI-powered product search",
@@ -37,7 +37,7 @@ export const PAYABLE_ROUTES: PayableRoute[] = [
 		},
 	},
 	{
-		path: "/search",
+		path: "/x402/search",
 		method: "GET",
 		price: "0.01",
 		description: "Product search with filters",
@@ -54,7 +54,7 @@ export const PAYABLE_ROUTES: PayableRoute[] = [
 		},
 	},
 	{
-		path: "/buy",
+		path: "/x402/buy",
 		method: "POST",
 		price: "0.01",
 		description: "Create order and get serialized transaction",
