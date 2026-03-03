@@ -7,6 +7,8 @@ import { rateLimit } from "./middleware/rateLimit.js";
 import { buyRouter } from "./routes/buy.js";
 import { searchRouter } from "./routes/search.js";
 import { shopRouter } from "./routes/shop.js";
+import { PAYABLE_ROUTES } from "./x402/config.js";
+import { handle402Probe, x402PayableMiddleware } from "./x402/middleware.js";
 
 export const app = new OpenAPIHono();
 
@@ -27,49 +29,98 @@ app.use("/search/*", rateLimit({ windowMs: 60 * 1000, maxRequests: 60 }));
 app.use("/shop/*", rateLimit({ windowMs: 60 * 1000, maxRequests: 60 }));
 app.use("/buy/*", rateLimit({ windowMs: 60 * 1000, maxRequests: 60 }));
 
+// x402 payable middleware — returns 402 when no X-PAYMENT header
+for (const route of PAYABLE_ROUTES) {
+	app.use(`${route.path}/*`, x402PayableMiddleware(route));
+}
+
+// GET probe handlers for POST-only routes (x402scan probes both GET and POST)
+const shopRoute = PAYABLE_ROUTES.find((r) => r.path === "/shop")!;
+const buyRoute = PAYABLE_ROUTES.find((r) => r.path === "/buy")!;
+app.get("/shop", (c) => handle402Probe(c, shopRoute));
+app.get("/buy", (c) => handle402Probe(c, buyRoute));
+
 // API routes
 app.route("/search", searchRouter);
 app.route("/shop", shopRouter);
 app.route("/buy", buyRouter);
 
-// OpenAPI spec
-app.doc("/openapi.json", {
-	openapi: "3.1.0",
-	info: {
-		title: "Purch API",
-		version: "1.0.0",
-		description: `
+// Custom OpenAPI spec with x402 extensions
+app.get("/openapi.json", (c) => {
+	const baseConfig = {
+		openapi: "3.1.0" as const,
+		info: {
+			title: "Purch API",
+			version: "1.0.0",
+			description: `
 # Purch Public API
 
-AI-powered shopping API for product search and checkout.
+AI-powered shopping API for product search and checkout. All endpoints are payable via the x402 protocol.
 
-## Rate Limits
+## x402 Payment
 
-- 60 requests per minute per IP address
-- Rate limit headers are included in all responses:
-  - \`X-RateLimit-Limit\`: Maximum requests per window
-  - \`X-RateLimit-Remaining\`: Requests remaining
-  - \`X-RateLimit-Reset\`: Seconds until window resets
+All API endpoints require payment via the x402 protocol. Send a valid \`X-PAYMENT\` header with your request.
+Without it, the API returns a \`402 Payment Required\` response with payment instructions.
 
 ## Endpoints
 
-| Endpoint | Description |
-|----------|-------------|
-| \`GET /search\` | Structured product search with filters |
-| \`POST /shop\` | Natural language AI shopping assistant |
-| \`POST /buy\` | Create a purchase order |
+| Endpoint | Price | Description |
+|----------|-------|-------------|
+| \`GET /search\` | $0.01 | Structured product search with filters |
+| \`POST /shop\` | $0.10 | Natural language AI shopping assistant |
+| \`POST /buy\` | $0.01 | Create a purchase order |
 `,
-		contact: {
-			name: "Purch Support",
-			url: "https://purch.xyz",
+			contact: {
+				name: "Purch Support",
+				url: "https://purch.xyz",
+			},
 		},
-	},
-	servers: [{ url: "https://api.purch.xyz", description: "Production" }],
-	tags: [
-		{ name: "Search", description: "Product search endpoints" },
-		{ name: "Shop", description: "AI-powered shopping assistant" },
-		{ name: "Buy", description: "Checkout and order management" },
-	],
+		servers: [{ url: "https://api.purch.xyz", description: "Production" }],
+		tags: [
+			{ name: "Search", description: "Product search endpoints" },
+			{ name: "Shop", description: "AI-powered shopping assistant" },
+			{ name: "Buy", description: "Checkout and order management" },
+		],
+	};
+
+	// Get the auto-generated OpenAPI document with full Zod schemas
+	const spec = app.getOpenAPIDocument(baseConfig);
+
+	// Add x402 security scheme
+	if (!spec.components) spec.components = {};
+	spec.components.securitySchemes = {
+		...spec.components.securitySchemes,
+		x402: {
+			type: "apiKey",
+			in: "header",
+			name: "X-PAYMENT",
+		},
+	};
+
+	// Augment payable paths with x402 extensions
+	for (const route of PAYABLE_ROUTES) {
+		const method = route.method.toLowerCase();
+		const pathSpec = spec.paths?.[route.path];
+		if (!pathSpec) continue;
+
+		const operation = pathSpec[method as keyof typeof pathSpec] as Record<string, unknown> | undefined;
+		if (!operation) continue;
+
+		operation["x-agentcash-auth"] = { mode: "paid" };
+		operation["x-payment-info"] = {
+			protocols: ["x402"],
+			pricingMode: "fixed",
+			price: route.price,
+		};
+		operation.security = [{ x402: [] }];
+	}
+
+	// Remove the /openapi.json path from the spec (self-reference)
+	if (spec.paths?.["/openapi.json"]) {
+		delete spec.paths["/openapi.json"];
+	}
+
+	return c.json(spec);
 });
 
 // Swagger UI

@@ -38,3 +38,25 @@ export const ApiErrorSchema = z
 		details: z.record(z.unknown()).optional(),
 	})
 	.openapi("ApiError");
+
+export const PaymentRequiredSchema = z
+	.object({
+		x402Version: z.number().openapi({ example: 1 }),
+		error: z.string().openapi({ example: "X-PAYMENT header is required" }),
+		accepts: z.array(
+			z.object({
+				scheme: z.string().openapi({ example: "exact" }),
+				network: z.string().openapi({ example: "solana" }),
+				maxAmountRequired: z.string().openapi({ example: "100000" }),
+				resource: z.string().openapi({ example: "https://api.purch.xyz/shop" }),
+				description: z.string().openapi({ example: "AI-powered product search" }),
+				mimeType: z.string().openapi({ example: "application/json" }),
+				maxTimeoutSeconds: z.number().openapi({ example: 60 }),
+				asset: z.string().openapi({ example: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" }),
+				payTo: z.string().openapi({ example: "DSfjMYRmxsJRxkygD4Z6yhg5XLGyFiNkkZpjFNX2ZEEC" }),
+				extra: z.record(z.unknown()).optional(),
+				outputSchema: z.record(z.unknown()).optional(),
+			}),
+		),
+	})
+	.openapi("PaymentRequired");

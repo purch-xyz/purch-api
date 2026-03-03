@@ -1,6 +1,6 @@
 import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import { BuyRequestSchema, BuyResponseSchema } from "../schemas/buy.js";
-import { ApiErrorSchema } from "../schemas/common.js";
+import { ApiErrorSchema, PaymentRequiredSchema } from "../schemas/common.js";
 import { purchClient } from "../services/purch.js";
 
 export const buyRouter = new OpenAPIHono();
@@ -51,11 +51,11 @@ Returns a serialized Solana transaction that must be signed by the wallet to com
 				},
 			},
 		},
-		401: {
-			description: "Unauthorized",
+		402: {
+			description: "Payment Required",
 			content: {
 				"application/json": {
-					schema: ApiErrorSchema,
+					schema: PaymentRequiredSchema,
 				},
 			},
 		},

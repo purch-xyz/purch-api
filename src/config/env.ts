@@ -4,6 +4,7 @@ const envSchema = z.object({
 	PORT: z.coerce.number().default(8080),
 	PURCH_BACKEND_URL: z.string().url(),
 	PURCH_INTERNAL_API_KEY: z.string().min(1),
+	X402_PAYTO_ADDRESS: z.string().min(32),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -1,5 +1,5 @@
 import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
-import { ApiErrorSchema } from "../schemas/common.js";
+import { ApiErrorSchema, PaymentRequiredSchema } from "../schemas/common.js";
 import { SearchQuerySchema, SearchResponseSchema } from "../schemas/search.js";
 import { purchClient } from "../services/purch.js";
 
@@ -32,11 +32,11 @@ const searchRoute = createRoute({
 				},
 			},
 		},
-		401: {
-			description: "Unauthorized",
+		402: {
+			description: "Payment Required",
 			content: {
 				"application/json": {
-					schema: ApiErrorSchema,
+					schema: PaymentRequiredSchema,
 				},
 			},
 		},
