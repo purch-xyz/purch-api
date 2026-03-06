@@ -7,8 +7,11 @@ import { rateLimit } from "./middleware/rateLimit.js";
 import { buyRouter } from "./routes/buy.js";
 import { searchRouter } from "./routes/search.js";
 import { shopRouter } from "./routes/shop.js";
+import { vaultBuyRouter } from "./routes/vault-buy.js";
+import { vaultDownloadRouter } from "./routes/vault-download.js";
+import { vaultSearchRouter } from "./routes/vault-search.js";
 import { PAYABLE_ROUTES } from "./x402/config.js";
-import { handle402Probe, x402PayableMiddleware } from "./x402/middleware.js";
+import { handle402Probe, x402Middleware } from "./x402/middleware.js";
 
 export const app = new OpenAPIHono();
 
@@ -28,30 +31,37 @@ app.get("/health", (c) =>
 app.use("/search/*", rateLimit({ windowMs: 60 * 1000, maxRequests: 60 }));
 app.use("/shop/*", rateLimit({ windowMs: 60 * 1000, maxRequests: 60 }));
 app.use("/buy/*", rateLimit({ windowMs: 60 * 1000, maxRequests: 60 }));
+app.use("/vault/*", rateLimit({ windowMs: 60 * 1000, maxRequests: 60 }));
 
 // x402 rate limiting (60 req/min per IP)
 app.use("/x402/*", rateLimit({ windowMs: 60 * 1000, maxRequests: 60 }));
 
-// x402 payable middleware — returns 402 when no X-PAYMENT header (only on /x402/* routes)
-for (const route of PAYABLE_ROUTES) {
-	app.use(`${route.path}/*`, x402PayableMiddleware(route));
-}
+// x402 payment middleware — verifies and settles payments via Coinbase facilitator
+app.use("/x402/*", x402Middleware);
 
 // GET probe handlers for POST-only x402 routes (x402scan probes both GET and POST)
 const shopRoute = PAYABLE_ROUTES.find((r) => r.path === "/x402/shop")!;
 const buyRoute = PAYABLE_ROUTES.find((r) => r.path === "/x402/buy")!;
+const vaultBuyRoute = PAYABLE_ROUTES.find((r) => r.path === "/x402/vault/buy")!;
 app.get("/x402/shop", (c) => handle402Probe(c, shopRoute));
 app.get("/x402/buy", (c) => handle402Probe(c, buyRoute));
+app.get("/x402/vault/buy", (c) => handle402Probe(c, vaultBuyRoute));
 
 // Open routes (partners — no x402 gate)
 app.route("/search", searchRouter);
 app.route("/shop", shopRouter);
 app.route("/buy", buyRouter);
+app.route("/vault/search", vaultSearchRouter);
+app.route("/vault/buy", vaultBuyRouter);
+app.route("/vault/download", vaultDownloadRouter);
 
 // x402 routes (AI agents — gated by x402 middleware above)
 app.route("/x402/search", searchRouter);
 app.route("/x402/shop", shopRouter);
 app.route("/x402/buy", buyRouter);
+app.route("/x402/vault/search", vaultSearchRouter);
+app.route("/x402/vault/buy", vaultBuyRouter);
+app.route("/x402/vault/download", vaultDownloadRouter);
 
 // Custom OpenAPI spec with x402 extensions
 app.get("/openapi.json", (c) => {
@@ -77,6 +87,9 @@ Without it, the API returns a \`402 Payment Required\` response with payment ins
 | \`GET /x402/search\` | $0.01 | Structured product search with filters |
 | \`POST /x402/shop\` | $0.10 | Natural language AI shopping assistant |
 | \`POST /x402/buy\` | $0.01 | Create a purchase order |
+| \`GET /x402/vault/search\` | $0.01 | Search vault items (skills, knowledge, personas) |
+| \`POST /x402/vault/buy\` | $0.01 | Initiate purchase — returns \`serializedTransaction\`, \`purchaseId\`, and \`downloadToken\` |
+| \`GET /x402/vault/download/:purchaseId\` | $0.01 | Download purchased file — requires \`downloadToken\` query param, \`txSignature\` on first download |
 `,
 			contact: {
 				name: "Purch Support",
@@ -88,6 +101,7 @@ Without it, the API returns a \`402 Payment Required\` response with payment ins
 			{ name: "Search", description: "Product search endpoints" },
 			{ name: "Shop", description: "AI-powered shopping assistant" },
 			{ name: "Buy", description: "Checkout and order management" },
+			{ name: "Vault", description: "AI skills, knowledge bases, and personas marketplace" },
 		],
 	};
 
@@ -120,7 +134,9 @@ Without it, the API returns a \`402 Payment Required\` response with payment ins
 		const pathSpec = spec.paths?.[route.path];
 		if (!pathSpec) continue;
 
-		const operation = pathSpec[method as keyof typeof pathSpec] as Record<string, unknown> | undefined;
+		const operation = pathSpec[method as keyof typeof pathSpec] as
+			| Record<string, unknown>
+			| undefined;
 		if (!operation) continue;
 
 		operation["x-agentcash-auth"] = { mode: "paid" };

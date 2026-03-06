@@ -5,6 +5,8 @@ const envSchema = z.object({
 	PURCH_BACKEND_URL: z.string().url(),
 	PURCH_INTERNAL_API_KEY: z.string().min(1),
 	X402_PAYTO_ADDRESS: z.string().min(32),
+	X402_CDP_API_KEY_ID: z.string().min(1),
+	X402_CDP_API_KEY_SECRET: z.string().min(1),
 });
 
 const parsed = envSchema.safeParse(process.env);
