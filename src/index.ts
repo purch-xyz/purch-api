@@ -9,6 +9,7 @@ console.log(`
 │   Server:  http://localhost:${env.PORT}        │
 │   Docs:    http://localhost:${env.PORT}/docs   │
 │   OpenAPI: http://localhost:${env.PORT}/openapi.json │
+│   x402:    Coinbase CDP facilitator     │
 │                                         │
 └─────────────────────────────────────────┘
 `);
