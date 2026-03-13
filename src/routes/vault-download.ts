@@ -13,7 +13,9 @@ const vaultDownloadRoute = createRoute({
 	summary: "Download purchased vault item",
 	description: `Download the file for a vault purchase. Automatically verifies on-chain payment if not yet verified, triggers creator payout, then streams the ZIP file.
 
-After signing and submitting the serialized transaction from the buy step, wait for \`finalized\` confirmation, then call this endpoint with the \`downloadToken\` from the buy response and the \`txSignature\` from the on-chain submission.
+For purchases created via \`POST /x402/vault/buy\`, payment is already settled, so call this endpoint with the \`downloadToken\` only.
+
+For purchases created via \`POST /vault/buy\`, wait for \`finalized\` confirmation, then call this endpoint with the \`downloadToken\` and the on-chain \`txSignature\` from the submitted transaction.
 
 **Note:** Each call costs $0.01 via x402, including re-downloads.`,
 	request: {

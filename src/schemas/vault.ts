@@ -223,7 +223,7 @@ export const VaultDownloadQuerySchema = z.object({
 			param: { name: "txSignature", in: "query" },
 			example: "5wHu1qwD7q8ZQ...",
 			description:
-				"On-chain transaction signature. Required for first download (triggers verification). Optional for re-downloads.",
+				"Optional for x402 purchases. For purchases created via /vault/buy, include the on-chain transaction signature on first download to trigger verification; optional for re-downloads.",
 		}),
 });
 
