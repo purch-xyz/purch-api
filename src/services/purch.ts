@@ -100,23 +100,89 @@ interface VaultBuyResult {
 
 class PurchClient {
 	private baseUrl: string;
-	private apiKey: string;
+	private cachedIdToken: { token: string; expiresAt: number } | null = null;
 
 	constructor() {
 		this.baseUrl = env.PURCH_BACKEND_URL;
-		this.apiKey = env.PURCH_INTERNAL_API_KEY;
+	}
+
+	private async getServiceIdentityToken(): Promise<string | null> {
+		const audience = env.PURCH_BACKEND_AUDIENCE;
+		if (!audience) return null;
+
+		const now = Date.now();
+		if (this.cachedIdToken && now < this.cachedIdToken.expiresAt - 60_000) {
+			return this.cachedIdToken.token;
+		}
+
+		try {
+			const response = await fetch(
+				`http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity?audience=${encodeURIComponent(audience)}&format=full`,
+				{
+					headers: {
+						"Metadata-Flavor": "Google",
+					},
+				},
+			);
+
+			if (!response.ok) {
+				throw new Error(`metadata server returned ${response.status}`);
+			}
+
+			const token = await response.text();
+			const expiresAt = this.getTokenExpiry(token) ?? now + 55 * 60 * 1000;
+			this.cachedIdToken = { token, expiresAt };
+			return token;
+		} catch (error) {
+			const message = error instanceof Error ? error.message : "unknown error";
+			throw new Error(`Failed to fetch Google ID token: ${message}`);
+		}
+	}
+
+	private getTokenExpiry(token: string): number | null {
+		try {
+			const payloadPart = token.split(".")[1];
+			if (!payloadPart) return null;
+			const normalized = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
+			const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+
+			const payload = JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as {
+				exp?: number;
+			};
+
+			return typeof payload.exp === "number" ? payload.exp * 1000 : null;
+		} catch {
+			return null;
+		}
+	}
+
+	private async buildInternalHeaders(
+		extraHeaders?: RequestInit["headers"],
+		options: { includeJsonContentType?: boolean } = {},
+	): Promise<Headers> {
+		const headers = new Headers(extraHeaders);
+		const includeJsonContentType = options.includeJsonContentType !== false;
+
+		if (includeJsonContentType && !headers.has("Content-Type")) {
+			headers.set("Content-Type", "application/json");
+		}
+
+		const idToken = await this.getServiceIdentityToken();
+		if (idToken) {
+			headers.set("Authorization", `Bearer ${idToken}`);
+			return headers;
+		}
+
+		throw new Error("No Google service identity token is configured for purch-backend");
 	}
 
 	private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
 		const url = `${this.baseUrl}${endpoint}`;
+		const headers = await this.buildInternalHeaders(options.headers);
 
 		const response = await fetch(url, {
 			...options,
-			headers: {
-				"Content-Type": "application/json",
-				"X-Internal-Key": this.apiKey,
-				...options.headers,
-			},
+			headers,
 		});
 
 		if (!response.ok) {
@@ -216,11 +282,10 @@ class PurchClient {
 		const params = new URLSearchParams({ downloadToken });
 		if (txSignature) params.set("txSignature", txSignature);
 		const url = `${this.baseUrl}/api/public/vault/download/${purchaseId}?${params}`;
+		const headers = await this.buildInternalHeaders(undefined, { includeJsonContentType: false });
 
 		const response = await fetch(url, {
-			headers: {
-				"X-Internal-Key": this.apiKey,
-			},
+			headers,
 		});
 
 		if (!response.ok) {

@@ -90,5 +90,5 @@ bun typecheck    # TypeScript validation
 |----------|-------------|
 | `PORT` | Server port (default: 8080) |
 | `PURCH_BACKEND_URL` | Purch backend API URL |
-| `PURCH_INTERNAL_API_KEY` | Internal API key for backend |
+| `PURCH_BACKEND_AUDIENCE` | Cloud Run audience for backend ID token auth |
 | `API_KEYS` | Comma-separated list of valid API keys |

@@ -131,27 +131,27 @@ else
     fail "Invalid JWT not rejected (HTTP $HTTP_CODE)"
 fi
 
-print_test "Access internal endpoint without internal key"
+print_test "Access internal endpoint without service auth"
 RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BACKEND_URL/api/agent/shop" \
     -H "Content-Type: application/json" \
     -d '{"message":"test"}')
 HTTP_CODE=$(echo "$RESPONSE" | tail -1)
 if [[ "$HTTP_CODE" == "401" ]]; then
-    pass "Internal endpoint requires X-Internal-Key"
+    pass "Internal endpoint requires service auth"
 else
-    fail "Internal endpoint accessible without key (HTTP $HTTP_CODE)"
+    fail "Internal endpoint accessible without service auth (HTTP $HTTP_CODE)"
 fi
 
-print_test "Access internal endpoint with wrong key"
+print_test "Access internal endpoint with invalid bearer token"
 RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BACKEND_URL/api/agent/shop" \
     -H "Content-Type: application/json" \
-    -H "X-Internal-Key: wrong-key-12345" \
+    -H "Authorization: Bearer invalid-token" \
     -d '{"message":"test"}')
 HTTP_CODE=$(echo "$RESPONSE" | tail -1)
 if [[ "$HTTP_CODE" == "401" ]]; then
-    pass "Wrong internal key rejected"
+    pass "Invalid service token rejected"
 else
-    fail "Wrong internal key accepted (HTTP $HTTP_CODE)"
+    fail "Invalid service token accepted (HTTP $HTTP_CODE)"
 fi
 
 print_section "Injection Attack Prevention"
