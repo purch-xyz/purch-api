@@ -15,7 +15,7 @@ const vaultBuyRoute = createRoute({
 ## Flow
 1. Call this endpoint with the item \`slug\`, your \`walletAddress\`, and \`email\`
 2. Receive a \`serializedTransaction\`, \`purchaseId\`, and \`downloadToken\`
-3. Deserialize, sign, and submit the transaction on-chain
+3. Deserialize, sign, submit the transaction, and wait for \`finalized\` confirmation
 4. Download via \`GET /x402/vault/download/:purchaseId?downloadToken=...&txSignature=...\` (auto-verifies payment)`,
 	request: {
 		body: {
