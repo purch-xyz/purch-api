@@ -78,5 +78,65 @@ export const BuyResponseSchema = z
 	})
 	.openapi("BuyResponse");
 
+/**
+ * x402 buy request — no walletAddress needed (purch pays on behalf of agent).
+ */
+export const X402BuyRequestSchema = z
+	.object({
+		productUrl: z.string().url().optional().openapi({
+			example: "https://amazon.com/dp/B0CXYZ1234",
+			description:
+				"Product URL. For Amazon: https://amazon.com/dp/ASIN. For Shopify: https://store.com/products/item-name (requires variantId)",
+		}),
+		asin: z.string().optional().openapi({
+			example: "B0CXYZ1234",
+			description: "Amazon ASIN (10-character code). Use this OR productUrl for Amazon products",
+		}),
+		shippingAddress: ShippingAddressSchema,
+		email: z.string().email().openapi({
+			example: "john@example.com",
+			description: "Email for order confirmation and tracking",
+		}),
+		variantId: z.string().optional().openapi({
+			example: "41913945718867",
+			description: "Required for Shopify products. The specific variant ID from the product",
+		}),
+	})
+	.refine((data) => data.productUrl || data.asin, {
+		message: "Either productUrl or asin is required",
+	})
+	.openapi("X402BuyRequest");
+
+/**
+ * x402 buy response — order confirmation, no serialized transaction or checkout URL.
+ */
+export const X402BuyResponseSchema = z
+	.object({
+		orderId: z.string().openapi({
+			example: "550e8400-e29b-41d4-a716-446655440000",
+		}),
+		status: z.string().openapi({
+			example: "processing",
+			description: "Order status after payment",
+		}),
+		product: z.object({
+			title: z.string().optional(),
+			imageUrl: z.string().url().optional(),
+			price: z
+				.object({
+					amount: z.string(),
+					currency: z.string(),
+				})
+				.optional(),
+		}),
+		totalPrice: z.object({
+			amount: z.string().openapi({ example: "84.99" }),
+			currency: z.string().openapi({ example: "USD" }),
+		}),
+	})
+	.openapi("X402BuyResponse");
+
 export type BuyRequest = z.infer<typeof BuyRequestSchema>;
 export type BuyResponse = z.infer<typeof BuyResponseSchema>;
+export type X402BuyRequest = z.infer<typeof X402BuyRequestSchema>;
+export type X402BuyResponse = z.infer<typeof X402BuyResponseSchema>;

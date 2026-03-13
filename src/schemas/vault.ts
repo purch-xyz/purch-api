@@ -227,7 +227,58 @@ export const VaultDownloadQuerySchema = z.object({
 		}),
 });
 
+/**
+ * x402 vault buy request — same fields, walletAddress still needed for purchase record.
+ */
+export const X402VaultBuyRequestSchema = z
+	.object({
+		slug: z.string().min(1).openapi({
+			example: "marketing-automation-pro",
+			description: "Vault item slug to purchase",
+		}),
+		walletAddress: z.string().openapi({
+			example: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+			description: "Solana wallet address (base58) for purchase record",
+		}),
+		email: z.string().email().openapi({
+			example: "agent@example.com",
+			description: "Email for purchase confirmation and download access",
+		}),
+	})
+	.refine((data) => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(data.walletAddress), {
+		message: "Invalid Solana wallet address (must be base58)",
+		path: ["walletAddress"],
+	})
+	.openapi("X402VaultBuyRequest");
+
+/**
+ * x402 vault buy response — no serialized transaction, purchase already complete.
+ */
+export const X402VaultBuyResponseSchema = z
+	.object({
+		purchaseId: z.string().uuid().openapi({
+			example: "550e8400-e29b-41d4-a716-446655440000",
+			description: "Purchase ID — use this for the download endpoint",
+		}),
+		downloadToken: z.string().openapi({
+			example: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			description: "Secret token for downloading the file",
+		}),
+		item: z
+			.object({
+				slug: z.string(),
+				title: z.string(),
+				productType: z.enum(["skill", "knowledge", "persona"]),
+				price: z.number().openapi({ description: "Price in USDC (whole units)" }),
+				coverImageUrl: z.string().url().nullable(),
+			})
+			.nullable(),
+	})
+	.openapi("X402VaultBuyResponse");
+
 export type VaultSearchQuery = z.infer<typeof VaultSearchQuerySchema>;
 export type VaultSearchResponse = z.infer<typeof VaultSearchResponseSchema>;
 export type VaultBuyRequest = z.infer<typeof VaultBuyRequestSchema>;
 export type VaultBuyResponse = z.infer<typeof VaultBuyResponseSchema>;
+export type X402VaultBuyRequest = z.infer<typeof X402VaultBuyRequestSchema>;
+export type X402VaultBuyResponse = z.infer<typeof X402VaultBuyResponseSchema>;

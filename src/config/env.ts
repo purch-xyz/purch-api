@@ -7,6 +7,7 @@ const envSchema = z.object({
 	X402_PAYTO_ADDRESS: z.string().min(32),
 	X402_CDP_API_KEY_ID: z.string().min(1),
 	X402_CDP_API_KEY_SECRET: z.string().min(1),
+	ORDER_TREASURY_WALLET: z.string().min(32),
 });
 
 const parsed = envSchema.safeParse(process.env);

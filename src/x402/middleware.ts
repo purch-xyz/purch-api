@@ -6,7 +6,7 @@ import { SOLANA_MAINNET_CAIP2 } from "@x402/svm";
 import { ExactSvmScheme } from "@x402/svm/exact/server";
 import type { Context } from "hono";
 import { env } from "../config/env.js";
-import { PAYABLE_ROUTES, type PayableRoute } from "./config.js";
+import { DYNAMIC_ROUTE_CONFIG, PAYABLE_ROUTES, type PayableRoute } from "./config.js";
 
 // --- Facilitator setup ---
 
@@ -22,24 +22,13 @@ const resourceServer = new x402ResourceServer(facilitatorClient).register(
 	new ExactSvmScheme(),
 );
 
-// --- Build route config from PAYABLE_ROUTES ---
+// --- Build combined route config (static + dynamic) ---
 
-function buildRouteConfig() {
-	const routes: Record<
-		string,
-		{
-			accepts: Array<{
-				scheme: string;
-				price: string;
-				network: string;
-				payTo: string;
-			}>;
-			description: string;
-			mimeType: string;
-			maxTimeoutSeconds: number;
-		}
-	> = {};
+function buildRouteConfig(): RoutesConfig {
+	// biome-ignore lint/suspicious/noExplicitAny: x402 RoutesConfig accepts both static and dynamic price fields
+	const routes: Record<string, any> = {};
 
+	// Static routes (fixed price string)
 	for (const route of PAYABLE_ROUTES) {
 		const key = `${route.method} ${route.path}`;
 		routes[key] = {
@@ -57,12 +46,22 @@ function buildRouteConfig() {
 		};
 	}
 
-	return routes as RoutesConfig;
+	// Dynamic routes (price is an async function)
+	for (const [key, config] of Object.entries(DYNAMIC_ROUTE_CONFIG)) {
+		routes[key] = {
+			accepts: [config.accepts],
+			description: config.description,
+			mimeType: config.mimeType,
+			maxTimeoutSeconds: config.maxTimeoutSeconds,
+		};
+	}
+
+	return routes;
 }
 
 /**
  * Official x402 payment middleware with Coinbase facilitator.
- * Verifies payments and settles on-chain.
+ * Supports both static pricing (search, shop) and dynamic pricing (buy, vault/buy).
  */
 export const x402Middleware = paymentMiddleware(buildRouteConfig(), resourceServer);
 
@@ -84,6 +83,32 @@ export function handle402Probe(c: Context, route: PayableRoute) {
 					description: route.description,
 					mimeType: "application/json",
 					maxTimeoutSeconds: 60,
+					payTo: env.X402_PAYTO_ADDRESS,
+				},
+			],
+		},
+		402,
+	);
+}
+
+/**
+ * Build a 402 probe response for dynamic-priced POST routes.
+ * Returns a generic "price varies" response since we can't compute without a body.
+ */
+export function handleDynamic402Probe(c: Context, description: string) {
+	return c.json(
+		{
+			x402Version: 2,
+			error: "Payment required",
+			description: `${description}. Send a POST request with a body to get the exact price.`,
+			accepts: [
+				{
+					scheme: "exact",
+					network: SOLANA_MAINNET_CAIP2,
+					resource: c.req.url,
+					description,
+					mimeType: "application/json",
+					maxTimeoutSeconds: 120,
 					payTo: env.X402_PAYTO_ADDRESS,
 				},
 			],

@@ -38,6 +38,11 @@ interface BuyParams {
 	variantId?: string;
 }
 
+interface FulfillResult {
+	status: string;
+	txSignature: string;
+}
+
 interface BuyResult {
 	orderId: string;
 	status: string;
@@ -265,6 +270,42 @@ class PurchClient {
 	 */
 	async vaultBuy(params: VaultBuyParams): Promise<VaultBuyResult> {
 		return this.request<VaultBuyResult>("/api/public/vault/purchase", {
+			method: "POST",
+			body: JSON.stringify(params),
+		});
+	}
+
+	/**
+	 * Fulfill an order by signing and submitting the Crossmint payment server-side.
+	 * Used after x402 dynamic pricing payment is verified.
+	 */
+	async fulfillOrder(orderId: string): Promise<FulfillResult> {
+		return this.request<FulfillResult>(`/api/public/orders/${orderId}/fulfill`, {
+			method: "POST",
+		});
+	}
+
+	/**
+	 * Create a vault purchase with payment already handled by x402.
+	 * Creates purchase intent and marks it as verified immediately.
+	 */
+	async vaultBuyX402(params: {
+		slug: string;
+		walletAddress: string;
+		email: string;
+		x402TxSignature: string;
+	}): Promise<{
+		purchaseId: string;
+		downloadToken: string;
+		item: {
+			slug: string;
+			title: string;
+			productType: string;
+			price: number;
+			coverImageUrl: string | null;
+		} | null;
+	}> {
+		return this.request("/api/public/vault/purchase/x402", {
 			method: "POST",
 			body: JSON.stringify(params),
 		});

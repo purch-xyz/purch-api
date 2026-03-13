@@ -1,3 +1,15 @@
+import { SOLANA_MAINNET_CAIP2 } from "@x402/svm";
+import { env } from "../config/env.js";
+import { purchClient } from "../services/purch.js";
+import type { ShippingAddress } from "../types/index.js";
+import {
+	getCachedOrder,
+	getCachedVaultItem,
+	hashBody,
+	setCachedOrder,
+	setCachedVaultItem,
+} from "./order-cache.js";
+
 export const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
 interface SchemaField {
@@ -21,6 +33,9 @@ export interface PayableRoute {
 	inputSchema: InputSchema;
 }
 
+/**
+ * Routes with static (fixed) x402 pricing.
+ */
 export const PAYABLE_ROUTES: PayableRoute[] = [
 	{
 		path: "/x402/shop",
@@ -61,32 +76,6 @@ export const PAYABLE_ROUTES: PayableRoute[] = [
 		},
 	},
 	{
-		path: "/x402/buy",
-		method: "POST",
-		price: "0.01",
-		description: "Create order and get serialized transaction",
-		inputSchema: {
-			type: "http",
-			method: "POST",
-			bodyFields: {
-				productUrl: { type: "string", description: "Product URL (required if no asin)" },
-				asin: { type: "string", description: "Amazon ASIN (required if no productUrl)" },
-				email: { type: "string", description: "Email for order confirmation", required: true },
-				shippingAddress: {
-					type: "object",
-					description: "Shipping address with name, line1, city, state, postalCode, country",
-					required: true,
-				},
-				walletAddress: {
-					type: "string",
-					description: "Solana (base58) or EVM (0x) wallet address",
-					required: true,
-				},
-				variantId: { type: "string", description: "Required for Shopify products" },
-			},
-		},
-	},
-	{
 		path: "/x402/vault/search",
 		method: "GET",
 		price: "0.01",
@@ -106,25 +95,6 @@ export const PAYABLE_ROUTES: PayableRoute[] = [
 				maxPrice: { type: "integer", description: "Maximum price in USDC (whole units)" },
 				cursor: { type: "string", description: "Pagination cursor (UUID)" },
 				limit: { type: "integer", description: "Items per page (1-100, default 30)" },
-			},
-		},
-	},
-	{
-		path: "/x402/vault/buy",
-		method: "POST",
-		price: "0.01",
-		description: "Initiate vault purchase and get serialized transaction",
-		inputSchema: {
-			type: "http",
-			method: "POST",
-			bodyFields: {
-				slug: { type: "string", description: "Vault item slug", required: true },
-				walletAddress: {
-					type: "string",
-					description: "Solana wallet address (base58)",
-					required: true,
-				},
-				email: { type: "string", description: "Email for purchase confirmation", required: true },
 			},
 		},
 	},
@@ -157,3 +127,133 @@ export const PAYABLE_ROUTES: PayableRoute[] = [
 		},
 	},
 ];
+
+/**
+ * Dynamic price function for /x402/buy.
+ * Creates a Crossmint order with the treasury wallet as payer,
+ * caches the result, and returns the product price.
+ */
+async function getBuyPrice(context: {
+	adapter: { getBody: () => Promise<unknown> };
+}): Promise<string> {
+	const body = await context.adapter.getBody();
+	if (!body || typeof body !== "object") {
+		return "$0.01"; // fallback for malformed requests (will fail validation later)
+	}
+
+	const bodyHash = hashBody(body);
+	const cached = getCachedOrder(bodyHash);
+	if (cached) {
+		return `$${cached.totalPrice}`;
+	}
+
+	const typedBody = body as {
+		productUrl?: string;
+		asin?: string;
+		shippingAddress: ShippingAddress;
+		email: string;
+		walletAddress?: string;
+		variantId?: string;
+	};
+
+	// Create order on backend with treasury wallet as payer
+	const result = await purchClient.buy({
+		productUrl: typedBody.productUrl,
+		asin: typedBody.asin,
+		shippingAddress: typedBody.shippingAddress,
+		email: typedBody.email,
+		walletAddress: env.ORDER_TREASURY_WALLET,
+		variantId: typedBody.variantId,
+	});
+
+	setCachedOrder(bodyHash, {
+		orderId: result.orderId,
+		totalPrice: result.totalPrice.amount,
+		product: result.product,
+	});
+
+	return `$${result.totalPrice.amount}`;
+}
+
+/**
+ * Dynamic price function for /x402/vault/buy.
+ * Looks up the vault item price from the backend.
+ */
+async function getVaultBuyPrice(context: {
+	adapter: { getBody: () => Promise<unknown> };
+}): Promise<string> {
+	const body = await context.adapter.getBody();
+	if (!body || typeof body !== "object") {
+		return "$0.01";
+	}
+
+	const bodyHash = hashBody(body);
+	const cached = getCachedVaultItem(bodyHash);
+	if (cached) {
+		return `$${cached.price}`;
+	}
+
+	const typedBody = body as { slug?: string };
+	if (!typedBody.slug) {
+		return "$0.01";
+	}
+
+	// Search for the vault item to get its price
+	const searchResult = await purchClient.vaultSearch({ search: typedBody.slug, limit: 1 });
+	const item = searchResult.items.find((i) => i.slug === typedBody.slug);
+
+	if (!item) {
+		return "$0.01"; // will fail in handler
+	}
+
+	setCachedVaultItem(bodyHash, {
+		slug: item.slug,
+		price: item.price,
+		title: item.title,
+		productType: item.productType,
+	});
+
+	return `$${item.price}`;
+}
+
+/**
+ * Dynamic x402 route configurations.
+ * Price is determined per-request based on the product/item being purchased.
+ */
+export const DYNAMIC_ROUTE_CONFIG: Record<
+	string,
+	{
+		accepts: {
+			scheme: string;
+			price: (context: { adapter: { getBody: () => Promise<unknown> } }) => Promise<string>;
+			network: string;
+			payTo: string;
+		};
+		description: string;
+		mimeType: string;
+		maxTimeoutSeconds: number;
+	}
+> = {
+	"POST /x402/buy": {
+		accepts: {
+			scheme: "exact",
+			price: getBuyPrice,
+			network: SOLANA_MAINNET_CAIP2,
+			payTo: env.X402_PAYTO_ADDRESS,
+		},
+		description: "Purchase a product — price equals the product total (dynamic)",
+		mimeType: "application/json",
+		maxTimeoutSeconds: 120,
+	},
+	"POST /x402/vault/buy": {
+		accepts: {
+			scheme: "exact",
+			price: getVaultBuyPrice,
+			network: SOLANA_MAINNET_CAIP2,
+			payTo: env.X402_PAYTO_ADDRESS,
+		},
+		description: "Purchase a vault item — price equals the item price (dynamic)",
+		mimeType: "application/json",
+		maxTimeoutSeconds: 120,
+	},
+};
