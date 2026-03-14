@@ -173,7 +173,7 @@ Without it, the API returns a \`402 Payment Required\` response with payment ins
 		operation["x-agentcash-auth"] = { mode: "paid" };
 		operation["x-payment-info"] = {
 			protocols: ["x402"],
-			pricingMode: "dynamic",
+			pricingMode: "quote",
 		};
 		operation.security = [{ x402: [] }];
 	}
