@@ -3,6 +3,7 @@ import { env } from "../config/env.js";
 import { X402BuyRequestSchema, X402BuyResponseSchema } from "../schemas/buy.js";
 import { ApiErrorSchema, PaymentRequiredSchema } from "../schemas/common.js";
 import { purchClient } from "../services/purch.js";
+import { getCachedOrder, hashBody, setCachedOrder } from "../x402/order-cache.js";
 
 export const x402BuyRouter = new OpenAPIHono();
 
@@ -68,30 +69,45 @@ Returns order confirmation with status and product details. No transaction signi
 	},
 });
 
+// Solana blockhashes expire after ~60s. Only reuse cached orders younger than this.
+const BLOCKHASH_MAX_AGE_MS = 45_000;
+
 x402BuyRouter.openapi(x402BuyRoute, async (c) => {
 	const body = c.req.valid("json");
+	const bodyHash = hashBody(body);
 
-	// Always create a fresh order to ensure the Solana transaction has a valid
-	// blockhash. Cached orders from previous requests may have expired blockhashes.
-	const result = await purchClient.buy({
-		productUrl: body.productUrl,
-		asin: body.asin,
-		shippingAddress: body.shippingAddress,
-		email: body.email,
-		walletAddress: env.ORDER_TREASURY_WALLET,
-		variantId: body.variantId,
-	});
+	// Use cached order if the blockhash is still fresh, otherwise create a new one
+	let cached = getCachedOrder(bodyHash, BLOCKHASH_MAX_AGE_MS);
+
+	if (!cached) {
+		const result = await purchClient.buy({
+			productUrl: body.productUrl,
+			asin: body.asin,
+			shippingAddress: body.shippingAddress,
+			email: body.email,
+			walletAddress: env.ORDER_TREASURY_WALLET,
+			variantId: body.variantId,
+		});
+
+		setCachedOrder(bodyHash, {
+			orderId: result.orderId,
+			totalPrice: result.totalPrice.amount,
+			product: result.product,
+		});
+
+		cached = getCachedOrder(bodyHash)!;
+	}
 
 	// Fulfill the order — backend signs and submits Crossmint payment
-	const fulfillResult = await purchClient.fulfillOrder(result.orderId);
+	const fulfillResult = await purchClient.fulfillOrder(cached.orderId);
 
 	return c.json(
 		{
-			orderId: result.orderId,
+			orderId: cached.orderId,
 			status: fulfillResult.status,
-			product: result.product,
+			product: cached.product,
 			totalPrice: {
-				amount: result.totalPrice.amount,
+				amount: cached.totalPrice,
 				currency: "usdc",
 			},
 		},

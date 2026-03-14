@@ -50,10 +50,11 @@ function hashBody(body: unknown): string {
 	return hasher.digest("hex");
 }
 
-export function getCachedOrder(hash: string): CachedOrder | undefined {
+export function getCachedOrder(hash: string, maxAgeMs?: number): CachedOrder | undefined {
 	const entry = orderCache.get(hash);
 	if (!entry) return undefined;
-	if (Date.now() - entry.createdAt > ORDER_TTL_MS) {
+	const ttl = maxAgeMs ?? ORDER_TTL_MS;
+	if (Date.now() - entry.createdAt > ttl) {
 		orderCache.delete(hash);
 		return undefined;
 	}
