@@ -1,8 +1,9 @@
 import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
+import { env } from "../config/env.js";
 import { X402BuyRequestSchema, X402BuyResponseSchema } from "../schemas/buy.js";
 import { ApiErrorSchema, PaymentRequiredSchema } from "../schemas/common.js";
 import { purchClient } from "../services/purch.js";
-import { getCachedOrder, hashBody } from "../x402/order-cache.js";
+import { getCachedOrder, hashBody, setCachedOrder } from "../x402/order-cache.js";
 
 export const x402BuyRouter = new OpenAPIHono();
 
@@ -71,13 +72,28 @@ Returns order confirmation with status and product details. No transaction signi
 x402BuyRouter.openapi(x402BuyRoute, async (c) => {
 	const body = c.req.valid("json");
 
-	// Retrieve the cached order created during the price function call
 	const bodyHash = hashBody(body);
-	const cached = getCachedOrder(bodyHash);
+	let cached = getCachedOrder(bodyHash);
 
+	// Cache miss — recreate the order (happens when Cloud Run routes the
+	// paid retry to a different instance than the 402 probe)
 	if (!cached) {
-		// This shouldn't happen if middleware ran correctly — price function creates the order
-		throw new Error("Order quote expired or not found. Please retry.");
+		const result = await purchClient.buy({
+			productUrl: body.productUrl,
+			asin: body.asin,
+			shippingAddress: body.shippingAddress,
+			email: body.email,
+			walletAddress: env.ORDER_TREASURY_WALLET,
+			variantId: body.variantId,
+		});
+
+		setCachedOrder(bodyHash, {
+			orderId: result.orderId,
+			totalPrice: result.totalPrice.amount,
+			product: result.product,
+		});
+
+		cached = getCachedOrder(bodyHash)!;
 	}
 
 	// Fulfill the order — backend signs and submits Crossmint payment
