@@ -1,4 +1,4 @@
-import { swaggerUI } from "@hono/swagger-ui";
+import { SwaggerUI, swaggerUI } from "@hono/swagger-ui";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
@@ -305,8 +305,22 @@ app.get("/.well-known/x402", (c) =>
 	}),
 );
 
-// Swagger UI
-app.get("/docs", swaggerUI({ url: "/openapi.json", title: "Purch" }));
+// Swagger UI (custom HTML to set meta description)
+app.get("/docs", (c) => {
+	const body = SwaggerUI({ url: "/openapi.json" });
+	return c.html(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="AI-powered shopping assistant for product search and crypto checkout" />
+    <title>Purch</title>
+  </head>
+  <body>
+    ${body}
+  </body>
+</html>`);
+});
 
 // Root redirect to docs
 app.get("/", (c) => c.redirect("/docs"));
