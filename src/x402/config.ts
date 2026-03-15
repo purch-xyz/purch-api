@@ -190,7 +190,8 @@ async function getBuyPrice(context: {
 	const bodyHash = hashBody(body);
 	const cached = getCachedOrder(bodyHash);
 	if (cached) {
-		return `$${cached.totalPrice}`;
+		const cachedMarkup = (Number.parseFloat(cached.totalPrice) * 1.05).toFixed(2);
+		return `$${cachedMarkup}`;
 	}
 
 	const typedBody = body as {
@@ -212,13 +213,16 @@ async function getBuyPrice(context: {
 		variantId: typedBody.variantId,
 	});
 
+	const basePrice = Number.parseFloat(result.totalPrice.amount);
+	const markedUpPrice = (basePrice * 1.05).toFixed(2);
+
 	setCachedOrder(bodyHash, {
 		orderId: result.orderId,
 		totalPrice: result.totalPrice.amount,
 		product: result.product,
 	});
 
-	return `$${result.totalPrice.amount}`;
+	return `$${markedUpPrice}`;
 }
 
 /**
