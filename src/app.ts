@@ -151,7 +151,7 @@ app.get("/openapi.json", (c) => {
 	const baseConfig = {
 		openapi: "3.1.0" as const,
 		info: {
-			title: "Purch API",
+			title: "Purch",
 			version: "1.0.0",
 			description:
 				"AI-powered shopping API for product search and crypto checkout. All endpoints are payable via the x402 protocol (USDC on Solana).",
@@ -306,7 +306,7 @@ app.get("/.well-known/x402", (c) =>
 );
 
 // Swagger UI
-app.get("/docs", swaggerUI({ url: "/openapi.json", title: "Purch API" }));
+app.get("/docs", swaggerUI({ url: "/openapi.json", title: "Purch" }));
 
 // Root redirect to docs
 app.get("/", (c) => c.redirect("/docs"));
