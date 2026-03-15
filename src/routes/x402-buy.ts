@@ -107,7 +107,7 @@ x402BuyRouter.openapi(x402BuyRoute, async (c) => {
 			status: fulfillResult.status,
 			product: cached.product,
 			totalPrice: {
-				amount: cached.totalPrice,
+				amount: (Number.parseFloat(cached.totalPrice) * 1.05).toFixed(2),
 				currency: "usdc",
 			},
 		},
