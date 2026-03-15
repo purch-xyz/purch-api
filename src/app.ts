@@ -15,6 +15,57 @@ import { x402VaultBuyRouter } from "./routes/x402-vault-buy.js";
 import { PAYABLE_ROUTES } from "./x402/config.js";
 import { handle402Probe, handleDynamic402Probe, x402Middleware } from "./x402/middleware.js";
 
+// --- Helpers for x402 bazaar discovery extensions ---
+
+// biome-ignore lint/suspicious/noExplicitAny: OpenAPI spec traversal requires dynamic access
+function resolveRef(ref: string, spec: Record<string, any>): Record<string, any> | undefined {
+	const parts = ref.replace("#/", "").split("/");
+	// biome-ignore lint/suspicious/noExplicitAny: traversing unknown spec shape
+	let current: any = spec;
+	for (const part of parts) {
+		if (current && typeof current === "object") {
+			current = current[part];
+		} else {
+			return undefined;
+		}
+	}
+	return current;
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: OpenAPI operation shape is dynamic
+function buildBazaarInput(op: Record<string, any>, spec: Record<string, any>) {
+	const rbSchema = op.requestBody?.content?.["application/json"]?.schema;
+	if (rbSchema) {
+		if (rbSchema.$ref && typeof rbSchema.$ref === "string") return resolveRef(rbSchema.$ref, spec);
+		return rbSchema;
+	}
+	// biome-ignore lint/suspicious/noExplicitAny: OpenAPI parameter shape
+	const params = op.parameters as Array<Record<string, any>> | undefined;
+	if (params?.length) {
+		const properties: Record<string, unknown> = {};
+		const required: string[] = [];
+		for (const p of params) {
+			if (p.in === "query" || p.in === "path") {
+				properties[p.name] = {
+					...p.schema,
+					...(p.description ? { description: p.description } : {}),
+				};
+				if (p.required) required.push(p.name);
+			}
+		}
+		return { type: "object", properties, ...(required.length ? { required } : {}) };
+	}
+	return undefined;
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: OpenAPI operation shape is dynamic
+function buildBazaarOutput(op: Record<string, any>, spec: Record<string, any>) {
+	const schema = op.responses?.["200"]?.content?.["application/json"]?.schema;
+	if (!schema) return undefined;
+	if (schema.$ref && typeof schema.$ref === "string") return resolveRef(schema.$ref, spec);
+	return schema;
+}
+
 export const app = new OpenAPIHono();
 
 // Global middleware
@@ -81,27 +132,31 @@ app.get("/openapi.json", (c) => {
 		info: {
 			title: "Purch API",
 			version: "1.0.0",
-			description: `
-# Purch Public API
+			description:
+				"AI-powered shopping API for product search and crypto checkout. All endpoints are payable via the x402 protocol (USDC on Solana).",
+			guidance: `Purch API lets AI agents search for products and purchase them using x402 micropayments (USDC on Solana).
 
-AI-powered shopping API for product search and checkout. All endpoints are payable via the x402 protocol.
+## Quick Start
+1. Search for products: GET /x402/search?q=headphones
+2. Or use natural language: POST /x402/shop with {"message": "comfortable running shoes under $150"}
+3. Buy a product: POST /x402/buy with the ASIN or product URL, shipping address, and email
+4. Browse digital goods: GET /x402/vault/search
+5. Buy digital goods: POST /x402/vault/buy with the item slug
 
-## x402 Payment
+## Payment
+All endpoints require x402 payment. On first request you'll receive a 402 response with payment details.
+Your x402 client handles payment automatically — no wallet setup or transaction signing needed.
 
-All API endpoints require payment via the x402 protocol. Send a valid \`PAYMENT-SIGNATURE\` header with your request.
-Without it, the API returns a \`402 Payment Required\` response with payment instructions.
+## Pricing
+- Search endpoints (GET /x402/search, GET /x402/vault/search): $0.01 per call
+- AI shopping assistant (POST /x402/shop): $0.10 per call
+- Product purchases (POST /x402/buy): dynamic — equals the product total (including tax/shipping)
+- Vault purchases (POST /x402/vault/buy): dynamic — equals the item price in USDC
 
-## Endpoints
-
-| Endpoint | Price | Description |
-|----------|-------|-------------|
-| \`GET /x402/search\` | $0.01 | Structured product search with filters |
-| \`POST /x402/shop\` | $0.10 | Natural language AI shopping assistant |
-| \`POST /x402/buy\` | **Dynamic** (product price) | Purchase a product — x402 payment equals the total |
-| \`GET /x402/vault/search\` | $0.01 | Search vault items (skills, knowledge, personas) |
-| \`POST /x402/vault/buy\` | **Dynamic** (item price) | Purchase a vault item — x402 payment equals the price |
-| \`GET /x402/vault/download/:purchaseId\` | $0.01 | Download purchased file — requires \`downloadToken\` query param |
-`,
+## Product Identification
+- Amazon products: use "asin" (e.g. "B0CXYZ1234") or "productUrl" (e.g. "https://amazon.com/dp/B0CXYZ1234")
+- Shopify products: use "productUrl" + "variantId"
+- Vault items: use "slug" (e.g. "marketing-automation-pro")`,
 			contact: {
 				name: "Purch Support",
 				url: "https://purch.xyz",
@@ -139,12 +194,17 @@ Without it, the API returns a \`402 Payment Required\` response with payment ins
 		},
 	};
 
+	// Helper: find spec path matching a route (handles parameterized paths)
+	const findSpecPath = (routePath: string) =>
+		Object.keys(spec.paths ?? {}).find((p) => p === routePath || p.startsWith(`${routePath}/`));
+
 	// Augment static-priced paths with x402 extensions
 	for (const route of PAYABLE_ROUTES) {
 		const method = route.method.toLowerCase();
-		const pathSpec = spec.paths?.[route.path];
-		if (!pathSpec) continue;
+		const specPath = findSpecPath(route.path);
+		if (!specPath) continue;
 
+		const pathSpec = spec.paths![specPath];
 		const operation = pathSpec[method as keyof typeof pathSpec] as
 			| Record<string, unknown>
 			| undefined;
@@ -178,13 +238,51 @@ Without it, the API returns a \`402 Payment Required\` response with payment ins
 		operation.security = [{ x402: [] }];
 	}
 
+	// Add x402 bazaar discovery extensions (input/output schemas) to all operations
+	for (const pathSpec of Object.values(spec.paths ?? {})) {
+		for (const [key, value] of Object.entries(pathSpec as Record<string, unknown>)) {
+			if (key === "parameters" || typeof value !== "object" || !value) continue;
+			const operation = value as Record<string, unknown>;
+			const input = buildBazaarInput(operation, spec);
+			const output = buildBazaarOutput(operation, spec);
+			if (input || output) {
+				operation["x-extensions"] = {
+					bazaar: {
+						schema: {
+							properties: {
+								...(input ? { input } : {}),
+								...(output ? { output } : {}),
+							},
+						},
+					},
+				};
+			}
+		}
+	}
+
 	// Remove the /openapi.json path from the spec (self-reference)
 	if (spec.paths?.["/openapi.json"]) {
+		// biome-ignore lint/performance/noDelete: cleaning up generated spec object
 		delete spec.paths["/openapi.json"];
 	}
 
 	return c.json(spec);
 });
+
+// /.well-known/x402 discovery fallback
+app.get("/.well-known/x402", (c) =>
+	c.json({
+		version: 1,
+		resources: [
+			"GET /x402/search",
+			"POST /x402/shop",
+			"POST /x402/buy",
+			"GET /x402/vault/search",
+			"POST /x402/vault/buy",
+			"GET /x402/vault/download/{purchaseId}",
+		],
+	}),
+);
 
 // Swagger UI
 app.get("/docs", swaggerUI({ url: "/openapi.json" }));
