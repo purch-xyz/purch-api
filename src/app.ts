@@ -306,7 +306,7 @@ app.get("/.well-known/x402", (c) =>
 );
 
 // Swagger UI
-app.get("/docs", swaggerUI({ url: "/openapi.json" }));
+app.get("/docs", swaggerUI({ url: "/openapi.json", title: "Purch API" }));
 
 // Root redirect to docs
 app.get("/", (c) => c.redirect("/docs"));
