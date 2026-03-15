@@ -154,7 +154,7 @@ app.get("/openapi.json", (c) => {
 			title: "Purch",
 			version: "1.0.0",
 			description:
-				"Buy products on Amazon and Shopify, and skills, knowledge or personas in Purch Vault. All endpoints are payable via the x402 protocol (USDC on Solana).",
+				"Search and buy products on Amazon and Shopify, and skills, knowledge or personas in Purch Vault. All endpoints are payable via the x402 protocol (USDC on Solana).",
 			guidance: `Purch lets AI agents search for products and purchase them using x402 micropayments (USDC on Solana).
 
 ## Quick Start
@@ -313,7 +313,7 @@ app.get("/docs", (c) => {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Buy products on Amazon and Shopify, and skills, knowledge or personas in Purch Vault" />
+    <meta name="description" content="Search and buy products on Amazon and Shopify, and skills, knowledge or personas in Purch Vault" />
     <title>Purch</title>
   </head>
   <body>
