@@ -4,10 +4,8 @@ import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
 import { errorHandler } from "./middleware/error.js";
 import { rateLimit } from "./middleware/rateLimit.js";
-import { buyRouter } from "./routes/buy.js";
 import { searchRouter } from "./routes/search.js";
 import { shopRouter } from "./routes/shop.js";
-import { vaultBuyRouter } from "./routes/vault-buy.js";
 import { vaultDownloadRouter } from "./routes/vault-download.js";
 import { vaultSearchRouter } from "./routes/vault-search.js";
 import { x402BuyRouter } from "./routes/x402-buy.js";
@@ -124,15 +122,7 @@ app.use("/x402/vault/download/:purchaseId", async (c, next) => {
 	return next();
 });
 
-// Open routes (partners — no x402 gate)
-app.route("/search", searchRouter);
-app.route("/shop", shopRouter);
-app.route("/buy", buyRouter);
-app.route("/vault/search", vaultSearchRouter);
-app.route("/vault/buy", vaultBuyRouter);
-app.route("/vault/download", vaultDownloadRouter);
-
-// x402 routes (AI agents — gated by x402 middleware above)
+// x402 routes (gated by x402 middleware above)
 app.route("/x402/search", searchRouter);
 app.route("/x402/shop", shopRouter);
 app.route("/x402/buy", x402BuyRouter); // dynamic pricing — product price

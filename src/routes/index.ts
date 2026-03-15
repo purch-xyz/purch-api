@@ -1,6 +1,5 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { rateLimit } from "../middleware/rateLimit.js";
-import { buyRouter } from "./buy.js";
 import { searchRouter } from "./search.js";
 import { shopRouter } from "./shop.js";
 
@@ -18,4 +17,3 @@ routes.use(
 // Mount route handlers
 routes.route("/search", searchRouter);
 routes.route("/shop", shopRouter);
-routes.route("/buy", buyRouter);
