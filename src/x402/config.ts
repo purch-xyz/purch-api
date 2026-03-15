@@ -1,3 +1,4 @@
+import type { DeclareDiscoveryExtensionInput } from "@x402/extensions/bazaar";
 import { SOLANA_MAINNET_CAIP2 } from "@x402/svm";
 import { env } from "../config/env.js";
 import { purchClient } from "../services/purch.js";
@@ -12,25 +13,12 @@ import {
 
 export const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
-interface SchemaField {
-	type: string;
-	description: string;
-	required?: boolean;
-}
-
-interface InputSchema {
-	type: "http";
-	method: "GET" | "POST";
-	bodyFields?: Record<string, SchemaField>;
-	queryFields?: Record<string, SchemaField>;
-}
-
 export interface PayableRoute {
 	path: string;
 	method: "GET" | "POST";
 	price: string;
 	description: string;
-	inputSchema: InputSchema;
+	bazaar: DeclareDiscoveryExtensionInput;
 }
 
 /**
@@ -42,18 +30,38 @@ export const PAYABLE_ROUTES: PayableRoute[] = [
 		method: "POST",
 		price: "0.10",
 		description: "AI-powered product search",
-		inputSchema: {
-			type: "http",
-			method: "POST",
-			bodyFields: {
-				message: {
-					type: "string",
-					description: "Natural language product search query",
-					required: true,
+		bazaar: {
+			input: { message: "I need comfortable running shoes under $150 with good arch support" },
+			inputSchema: {
+				properties: {
+					message: { type: "string", description: "Natural language product search query" },
+					context: {
+						type: "object",
+						description: "Optional context with priceRange and preferences",
+						properties: {
+							priceRange: {
+								type: "object",
+								properties: { min: { type: "number" }, max: { type: "number" } },
+							},
+							preferences: { type: "array", items: { type: "string" } },
+						},
+					},
 				},
-				context: {
-					type: "object",
-					description: "Optional context with priceRange and preferences",
+				required: ["message"],
+			},
+			bodyType: "json",
+			output: {
+				example: {
+					reply: "Here are some great running shoes...",
+					products: [
+						{
+							asin: "B0CXYZ1234",
+							title: "Running Shoes",
+							price: 129.99,
+							currency: "USD",
+							source: "amazon",
+						},
+					],
 				},
 			},
 		},
@@ -63,15 +71,33 @@ export const PAYABLE_ROUTES: PayableRoute[] = [
 		method: "GET",
 		price: "0.01",
 		description: "Product search with filters",
-		inputSchema: {
-			type: "http",
-			method: "GET",
-			queryFields: {
-				q: { type: "string", description: "Search query", required: true },
-				priceMin: { type: "number", description: "Minimum price filter" },
-				priceMax: { type: "number", description: "Maximum price filter" },
-				brand: { type: "string", description: "Filter by brand" },
-				page: { type: "integer", description: "Page number for pagination" },
+		bazaar: {
+			input: { q: "wireless headphones" },
+			inputSchema: {
+				properties: {
+					q: { type: "string", description: "Search query" },
+					priceMin: { type: "number", description: "Minimum price filter" },
+					priceMax: { type: "number", description: "Maximum price filter" },
+					brand: { type: "string", description: "Filter by brand" },
+					page: { type: "integer", description: "Page number for pagination" },
+				},
+				required: ["q"],
+			},
+			output: {
+				example: {
+					products: [
+						{
+							asin: "B0CXYZ1234",
+							title: "Wireless Headphones",
+							price: 79.99,
+							currency: "USD",
+							source: "amazon",
+						},
+					],
+					totalResults: 150,
+					page: 1,
+					hasMore: true,
+				},
 			},
 		},
 	},
@@ -80,21 +106,40 @@ export const PAYABLE_ROUTES: PayableRoute[] = [
 		method: "GET",
 		price: "0.01",
 		description: "Search vault items (skills, knowledge, personas)",
-		inputSchema: {
-			type: "http",
-			method: "GET",
-			queryFields: {
-				q: { type: "string", description: "Search query" },
-				category: {
-					type: "string",
-					description:
-						"Filter by category: marketing, development, automation, career, ios, productivity",
+		bazaar: {
+			input: { q: "marketing automation" },
+			inputSchema: {
+				properties: {
+					q: { type: "string", description: "Search query" },
+					category: {
+						type: "string",
+						description: "Filter by category",
+						enum: ["marketing", "development", "automation", "career", "ios", "productivity"],
+					},
+					productType: {
+						type: "string",
+						description: "Filter by type",
+						enum: ["skill", "knowledge", "persona"],
+					},
+					minPrice: { type: "integer", description: "Minimum price in USDC (whole units)" },
+					maxPrice: { type: "integer", description: "Maximum price in USDC (whole units)" },
+					cursor: { type: "string", description: "Pagination cursor (UUID)" },
+					limit: { type: "integer", description: "Items per page (1-100, default 30)" },
 				},
-				productType: { type: "string", description: "Filter by type: skill, knowledge, persona" },
-				minPrice: { type: "integer", description: "Minimum price in USDC (whole units)" },
-				maxPrice: { type: "integer", description: "Maximum price in USDC (whole units)" },
-				cursor: { type: "string", description: "Pagination cursor (UUID)" },
-				limit: { type: "integer", description: "Items per page (1-100, default 30)" },
+			},
+			output: {
+				example: {
+					items: [
+						{
+							slug: "marketing-automation-pro",
+							title: "Marketing Automation Pro",
+							productType: "skill",
+							price: 5,
+							category: "marketing",
+						},
+					],
+					nextCursor: null,
+				},
 			},
 		},
 	},
@@ -104,26 +149,27 @@ export const PAYABLE_ROUTES: PayableRoute[] = [
 		price: "0.01",
 		description:
 			"Download purchased vault item file. URL: /x402/vault/download/:purchaseId?downloadToken=...&txSignature=...",
-		inputSchema: {
-			type: "http",
-			method: "GET",
-			queryFields: {
-				purchaseId: {
-					type: "string",
-					description: "Purchase ID (UUID) — passed as a path parameter in the URL",
-					required: true,
-				},
-				downloadToken: {
-					type: "string",
-					description: "Secret download token received from the buy response",
-					required: true,
-				},
-				txSignature: {
-					type: "string",
-					description:
-						"On-chain transaction signature. Required for first download, optional for re-downloads.",
-				},
+		bazaar: {
+			input: {
+				purchaseId: "550e8400-e29b-41d4-a716-446655440000",
+				downloadToken: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
 			},
+			inputSchema: {
+				properties: {
+					purchaseId: { type: "string", description: "Purchase ID (UUID) — path parameter" },
+					downloadToken: {
+						type: "string",
+						description: "Secret download token from buy response",
+					},
+					txSignature: {
+						type: "string",
+						description:
+							"On-chain tx signature. Required for first download, optional for re-downloads.",
+					},
+				},
+				required: ["purchaseId", "downloadToken"],
+			},
+			output: { example: "binary file download (ZIP)" },
 		},
 	},
 ];
@@ -232,6 +278,7 @@ export const DYNAMIC_ROUTE_CONFIG: Record<
 		description: string;
 		mimeType: string;
 		maxTimeoutSeconds: number;
+		bazaar: DeclareDiscoveryExtensionInput;
 	}
 > = {
 	"POST /x402/buy": {
@@ -244,6 +291,53 @@ export const DYNAMIC_ROUTE_CONFIG: Record<
 		description: "Purchase a product — price equals the product total (dynamic)",
 		mimeType: "application/json",
 		maxTimeoutSeconds: 120,
+		bazaar: {
+			input: {
+				asin: "B0CXYZ1234",
+				email: "buyer@example.com",
+				shippingAddress: {
+					name: "John Doe",
+					line1: "123 Main St",
+					city: "San Francisco",
+					state: "CA",
+					postalCode: "94102",
+					country: "US",
+				},
+			},
+			inputSchema: {
+				properties: {
+					productUrl: { type: "string", description: "Product URL (Amazon or Shopify)" },
+					asin: { type: "string", description: "Amazon ASIN (use this OR productUrl)" },
+					shippingAddress: {
+						type: "object",
+						description: "Shipping address",
+						properties: {
+							name: { type: "string" },
+							line1: { type: "string" },
+							line2: { type: "string" },
+							city: { type: "string" },
+							state: { type: "string" },
+							postalCode: { type: "string" },
+							country: { type: "string", description: "ISO 3166-1 alpha-2" },
+							phone: { type: "string" },
+						},
+						required: ["name", "line1", "city", "state", "postalCode", "country"],
+					},
+					email: { type: "string", description: "Email for order confirmation" },
+					variantId: { type: "string", description: "Required for Shopify products" },
+				},
+				required: ["email", "shippingAddress"],
+			},
+			bodyType: "json",
+			output: {
+				example: {
+					orderId: "550e8400-e29b-41d4-a716-446655440000",
+					status: "processing",
+					product: { title: "Wireless Headphones", price: { amount: "79.99", currency: "USD" } },
+					totalPrice: { amount: "84.99", currency: "USD" },
+				},
+			},
+		},
 	},
 	"POST /x402/vault/buy": {
 		accepts: {
@@ -255,5 +349,28 @@ export const DYNAMIC_ROUTE_CONFIG: Record<
 		description: "Purchase a vault item — price equals the item price (dynamic)",
 		mimeType: "application/json",
 		maxTimeoutSeconds: 120,
+		bazaar: {
+			input: {
+				slug: "marketing-automation-pro",
+				walletAddress: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
+				email: "agent@example.com",
+			},
+			inputSchema: {
+				properties: {
+					slug: { type: "string", description: "Vault item slug to purchase" },
+					walletAddress: { type: "string", description: "Solana wallet address (base58)" },
+					email: { type: "string", description: "Email for purchase confirmation" },
+				},
+				required: ["slug", "walletAddress", "email"],
+			},
+			bodyType: "json",
+			output: {
+				example: {
+					purchaseId: "550e8400-e29b-41d4-a716-446655440000",
+					downloadToken: "e3b0c44298fc1c149afbf4c8996fb924...",
+					item: { slug: "marketing-automation-pro", title: "Marketing Automation Pro", price: 5 },
+				},
+			},
+		},
 	},
 };

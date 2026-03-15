@@ -1,6 +1,7 @@
 import { createFacilitatorConfig } from "@coinbase/x402";
 import type { RoutesConfig } from "@x402/core/server";
 import { HTTPFacilitatorClient, x402ResourceServer } from "@x402/core/server";
+import { declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import { paymentMiddleware } from "@x402/hono";
 import { SOLANA_MAINNET_CAIP2 } from "@x402/svm";
 import { ExactSvmScheme } from "@x402/svm/exact/server";
@@ -43,6 +44,9 @@ function buildRouteConfig(): RoutesConfig {
 			description: route.description,
 			mimeType: "application/json",
 			maxTimeoutSeconds: 60,
+			extensions: {
+				...declareDiscoveryExtension(route.bazaar),
+			},
 		};
 	}
 
@@ -53,6 +57,9 @@ function buildRouteConfig(): RoutesConfig {
 			description: config.description,
 			mimeType: config.mimeType,
 			maxTimeoutSeconds: config.maxTimeoutSeconds,
+			extensions: {
+				...declareDiscoveryExtension(config.bazaar),
+			},
 		};
 	}
 
