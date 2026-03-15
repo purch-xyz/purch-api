@@ -99,6 +99,21 @@ app.get("/x402/shop", (c) => handle402Probe(c, shopRoute));
 app.get("/x402/buy", (c) => handleDynamic402Probe(c, "POST /x402/buy"));
 app.get("/x402/vault/buy", (c) => handleDynamic402Probe(c, "POST /x402/vault/buy"));
 
+// POST probe handlers for dynamic-priced routes: x402 middleware fails on empty body
+// (dynamic price function can't compute without a body), so return 402 manually
+app.use("/x402/buy", async (c, next) => {
+	if (c.req.method === "POST" && !c.req.header("x-payment") && !c.req.header("payment-signature")) {
+		return handleDynamic402Probe(c, "POST /x402/buy");
+	}
+	return next();
+});
+app.use("/x402/vault/buy", async (c, next) => {
+	if (c.req.method === "POST" && !c.req.header("x-payment") && !c.req.header("payment-signature")) {
+		return handleDynamic402Probe(c, "POST /x402/vault/buy");
+	}
+	return next();
+});
+
 // Vault/download 402 probe: x402 middleware can't match parameterized paths,
 // so return 402 manually when no payment header is present (before route validation)
 const vaultDownloadRoute = PAYABLE_ROUTES.find((r) => r.path === "/x402/vault/download")!;
