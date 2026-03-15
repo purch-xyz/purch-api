@@ -154,8 +154,8 @@ app.get("/openapi.json", (c) => {
 			title: "Purch",
 			version: "1.0.0",
 			description:
-				"AI-powered shopping API for product search and crypto checkout. All endpoints are payable via the x402 protocol (USDC on Solana).",
-			guidance: `Purch API lets AI agents search for products and purchase them using x402 micropayments (USDC on Solana).
+				"AI-powered shopping assistant for product search and crypto checkout. All endpoints are payable via the x402 protocol (USDC on Solana).",
+			guidance: `Purch lets AI agents search for products and purchase them using x402 micropayments (USDC on Solana).
 
 ## Quick Start
 1. Search for products: GET /x402/search?q=headphones
