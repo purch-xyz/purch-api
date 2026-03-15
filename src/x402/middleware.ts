@@ -93,6 +93,9 @@ export function handle402Probe(c: Context, route: PayableRoute) {
 					payTo: env.X402_PAYTO_ADDRESS,
 				},
 			],
+			extensions: {
+				...declareDiscoveryExtension(route.bazaar),
+			},
 		},
 		402,
 	);
@@ -100,25 +103,29 @@ export function handle402Probe(c: Context, route: PayableRoute) {
 
 /**
  * Build a 402 probe response for dynamic-priced POST routes.
- * Returns a generic "price varies" response since we can't compute without a body.
+ * Includes bazaar discovery extensions so x402scan can detect input schemas.
  */
-export function handleDynamic402Probe(c: Context, description: string) {
+export function handleDynamic402Probe(c: Context, routeKey: string) {
+	const config = DYNAMIC_ROUTE_CONFIG[routeKey];
 	return c.json(
 		{
 			x402Version: 2,
 			error: "Payment required",
-			description: `${description}. Send a POST request with a body to get the exact price.`,
+			description: `${config.description}. Send a POST request with a body to get the exact price.`,
 			accepts: [
 				{
 					scheme: "exact",
 					network: SOLANA_MAINNET_CAIP2,
 					resource: c.req.url,
-					description,
+					description: config.description,
 					mimeType: "application/json",
-					maxTimeoutSeconds: 120,
+					maxTimeoutSeconds: config.maxTimeoutSeconds,
 					payTo: env.X402_PAYTO_ADDRESS,
 				},
 			],
+			extensions: {
+				...declareDiscoveryExtension(config.bazaar),
+			},
 		},
 		402,
 	);
