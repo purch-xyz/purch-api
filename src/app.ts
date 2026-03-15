@@ -246,7 +246,7 @@ Your x402 client handles payment automatically — no wallet setup or transactio
 			const input = buildBazaarInput(operation, spec);
 			const output = buildBazaarOutput(operation, spec);
 			if (input || output) {
-				operation["x-extensions"] = {
+				operation.extensions = {
 					bazaar: {
 						schema: {
 							properties: {
