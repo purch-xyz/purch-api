@@ -278,11 +278,23 @@ class PurchClient {
 	/**
 	 * Fulfill an order by signing and submitting the Crossmint payment server-side.
 	 * Used after x402 dynamic pricing payment is verified.
+	 * Retries on 5xx errors since the backend instance may be recycled mid-request.
 	 */
-	async fulfillOrder(orderId: string): Promise<FulfillResult> {
-		return this.request<FulfillResult>(`/api/public/orders/${orderId}/fulfill`, {
-			method: "POST",
-		});
+	async fulfillOrder(orderId: string, maxRetries = 2): Promise<FulfillResult> {
+		let lastError: Error & { status?: number } = new Error("fulfillOrder failed");
+		for (let attempt = 0; attempt <= maxRetries; attempt++) {
+			try {
+				return await this.request<FulfillResult>(`/api/public/orders/${orderId}/fulfill`, {
+					method: "POST",
+				});
+			} catch (err) {
+				lastError = err as Error & { status?: number };
+				const isRetryable = lastError.status !== undefined && lastError.status >= 500;
+				if (!isRetryable || attempt === maxRetries) throw lastError;
+				await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+			}
+		}
+		throw lastError;
 	}
 
 	/**
