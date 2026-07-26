@@ -26,6 +26,7 @@ The server starts at `http://localhost:8080` with interactive docs at `/docs`.
 | `POST` | `/shop` | Natural language AI shopping assistant |
 | `POST` | `/buy` | Create a purchase order |
 | `GET` | `/buy/:orderId` | Check order status |
+| `GET` | `/x402/track` | Track any shipment by tracking number (~2,500 carriers) |
 
 ## Authentication
 
@@ -92,3 +93,5 @@ bun typecheck    # TypeScript validation
 | `PURCH_BACKEND_URL` | Purch backend API URL |
 | `PURCH_BACKEND_AUDIENCE` | Cloud Run audience for backend ID token auth |
 | `API_KEYS` | Comma-separated list of valid API keys |
+| `TRACK17_API_KEY` | 17TRACK API security key (shipment tracking) |
+| `SLACK_WEBHOOK_URL` | Optional — notifies on each shipment tracking lookup |

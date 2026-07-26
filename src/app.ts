@@ -1,4 +1,4 @@
-import { SwaggerUI, swaggerUI } from "@hono/swagger-ui";
+import { SwaggerUI } from "@hono/swagger-ui";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
@@ -9,6 +9,7 @@ import { shopRouter } from "./routes/shop.js";
 import { vaultDownloadRouter } from "./routes/vault-download.js";
 import { vaultSearchRouter } from "./routes/vault-search.js";
 import { x402BuyRouter } from "./routes/x402-buy.js";
+import { x402TrackRouter } from "./routes/x402-track.js";
 import { x402VaultBuyRouter } from "./routes/x402-vault-buy.js";
 import { PAYABLE_ROUTES } from "./x402/config.js";
 import { handle402Probe, handleDynamic402Probe, x402Middleware } from "./x402/middleware.js";
@@ -126,6 +127,7 @@ app.use("/x402/vault/download/:purchaseId", async (c, next) => {
 app.route("/x402/search", searchRouter);
 app.route("/x402/shop", shopRouter);
 app.route("/x402/buy", x402BuyRouter); // dynamic pricing — product price
+app.route("/x402/track", x402TrackRouter);
 app.route("/x402/vault/search", vaultSearchRouter);
 app.route("/x402/vault/buy", x402VaultBuyRouter); // dynamic pricing — item price
 app.route("/x402/vault/download", vaultDownloadRouter);
@@ -178,6 +180,7 @@ Your x402 client handles payment automatically — no wallet setup or transactio
 			{ name: "Search", description: "Product search endpoints" },
 			{ name: "Shop", description: "AI-powered shopping assistant" },
 			{ name: "Buy", description: "Checkout and order management" },
+			{ name: "Track", description: "Shipment tracking across ~2,500 carriers" },
 			{ name: "Vault", description: "AI skills, knowledge bases, and personas marketplace" },
 		],
 	};
@@ -288,6 +291,7 @@ app.get("/.well-known/x402", (c) =>
 			"GET /x402/search",
 			"POST /x402/shop",
 			"POST /x402/buy",
+			"GET /x402/track",
 			"GET /x402/vault/search",
 			"POST /x402/vault/buy",
 			"GET /x402/vault/download/{purchaseId}",
@@ -303,7 +307,7 @@ app.get("/docs", (c) => {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Search and buy products on Amazon and Shopify, and skills, knowledge or personas in Purch Vault" />
+    <meta name="description" content="Search and buy products on Amazon and Shopify, track shipments across 2,500 carriers, and get skills, knowledge or personas in Purch Vault" />
     <title>Purch</title>
   </head>
   <body>

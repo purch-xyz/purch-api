@@ -64,7 +64,7 @@ export function rateLimit(config: RateLimitConfig) {
 	};
 }
 
-function getClientIP(c: Context): string {
+export function getClientIP(c: Context): string {
 	// Cloudflare
 	const cfIP = c.req.header("CF-Connecting-IP");
 	if (cfIP) return cfIP;

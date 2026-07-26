@@ -13,6 +13,12 @@ import {
 
 export const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
+/**
+ * Price of a shipment lookup. 17TRACK bills ~$0.024 per new tracking number
+ * (entry quota pack), plus $0.50 margin.
+ */
+export const TRACK_PRICE_USD = "0.52";
+
 export interface PayableRoute {
 	path: string;
 	method: "GET" | "POST";
@@ -97,6 +103,92 @@ export const PAYABLE_ROUTES: PayableRoute[] = [
 					totalResults: 150,
 					page: 1,
 					hasMore: true,
+				},
+			},
+		},
+	},
+	{
+		path: "/x402/track",
+		method: "GET",
+		price: TRACK_PRICE_USD,
+		description: "Track any shipment across 3,400+ carriers by tracking number",
+		bazaar: {
+			input: { number: "1ZA1234E0205271688" },
+			inputSchema: {
+				properties: {
+					number: {
+						type: "string",
+						description: "Tracking number from any supported carrier (5-50 alphanumeric chars)",
+					},
+					carrier: {
+						type: "integer",
+						description:
+							"Optional 17TRACK carrier code. Omit to auto-detect from the number format.",
+					},
+					destinationPostalCode: {
+						type: "string",
+						description: "Only if a lookup returns ADDITIONAL_FIELD_REQUIRED for a postal code",
+					},
+					destinationCountry: {
+						type: "string",
+						description: "ISO 3166-1 alpha-2, paired with destinationPostalCode by some carriers",
+					},
+					shipDate: {
+						type: "string",
+						description: "Ship date (YYYY-MM-DD) — only if a carrier requires it",
+					},
+					phone: {
+						type: "string",
+						description: "Recipient phone — only if a carrier requires it",
+					},
+					cpfOrCnpj: {
+						type: "string",
+						description: "Brazilian CPF/CNPJ — only if a carrier requires it",
+					},
+				},
+				required: ["number"],
+			},
+			output: {
+				example: {
+					number: "1ZA1234E0205271688",
+					status: "InTransit",
+					subStatus: "InTransit_Departure",
+					statusDescription: null,
+					delivered: false,
+					found: true,
+					carrier: {
+						code: 100002,
+						name: "UPS",
+						homepage: "https://www.ups.com",
+						country: "US",
+					},
+					lastMileCarrier: null,
+					origin: "CN",
+					destination: "US",
+					latestEvent: {
+						time: "2026-07-20T14:32:00-07:00",
+						description: "Departed facility",
+						location: "SHENZHEN, CN",
+						stage: "InTransit",
+					},
+					milestones: [
+						{ stage: "InfoReceived", time: "2026-07-14T09:00:00+08:00" },
+						{ stage: "PickedUp", time: "2026-07-15T08:46:00+08:00" },
+						{ stage: "Departure", time: "2026-07-20T14:32:00-07:00" },
+					],
+					pickedUpAt: "2026-07-15T08:46:00+08:00",
+					deliveredAt: null,
+					daysInTransit: 6,
+					daysSinceLastUpdate: 1,
+					estimatedDelivery: {
+						from: "2026-07-28T08:00:00-05:00",
+						to: "2026-07-30T13:00:00-05:00",
+						source: "Official",
+					},
+					serviceType: "UPS Worldwide Express",
+					weightKg: "1.1",
+					carrierNotice: null,
+					trackingPageUrl: "https://t.17track.net/en#nums=1ZA1234E0205271688",
 				},
 			},
 		},
