@@ -1,66 +1,47 @@
-# @purch/api
+# Purch API
 
-Public API for Purch - AI-powered shopping assistant.
+Public x402 API for Purch — lets AI agents search and buy products on Amazon and Shopify, and track shipments across 3,400+ carriers. Every endpoint is payable via the [x402 protocol](https://www.x402.org) with USDC on Solana. No API keys, no signups — payment is the authentication.
 
-## Quick Start
+## 📊 Live x402 Metrics
 
-```bash
-# Install dependencies
-bun install
+[![x402scan](https://img.shields.io/badge/x402scan-live_metrics-2563eb?logo=solana&logoColor=white)](https://www.x402scan.com/server/ad1c686d-5f67-4160-ad50-72175071d9a7)
+[![Transactions](https://img.shields.io/badge/transactions-460%2B-blue)](https://www.x402scan.com/server/ad1c686d-5f67-4160-ad50-72175071d9a7)
+[![Volume](https://img.shields.io/badge/volume-%241.38k%2B-blue)](https://www.x402scan.com/server/ad1c686d-5f67-4160-ad50-72175071d9a7)
+[![Buyers](https://img.shields.io/badge/buyers-93%2B-blue)](https://www.x402scan.com/server/ad1c686d-5f67-4160-ad50-72175071d9a7)
 
-# Set up environment
-cp .env.example .env
-# Edit .env with your configuration
-
-# Start development server
-bun dev
-```
-
-The server starts at `http://localhost:8080` with interactive docs at `/docs`.
+All-time snapshot as of August 2026 — see the live numbers, charts, and resource pricing on [x402scan](https://www.x402scan.com/server/ad1c686d-5f67-4160-ad50-72175071d9a7).
 
 ## Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/search` | Structured product search with filters |
-| `POST` | `/shop` | Natural language AI shopping assistant |
-| `POST` | `/buy` | Create a purchase order |
-| `GET` | `/buy/:orderId` | Check order status |
-| `GET` | `/x402/track` | Track any shipment by tracking number (~2,500 carriers) |
+| Method | Endpoint | Price | Description |
+|--------|----------|-------|-------------|
+| `GET` | `/x402/search` | $0.01 | Structured product search with filters |
+| `POST` | `/x402/shop` | $0.10 | Natural language AI shopping assistant |
+| `POST` | `/x402/buy` | dynamic | Buy a product — price equals the product total |
+| `GET` | `/x402/track` | $0.52 | Track any shipment by tracking number (3,400+ carriers) |
 
-## Authentication
+Interactive docs at [api.purch.xyz/docs](https://api.purch.xyz/docs) · OpenAPI spec at [api.purch.xyz/openapi.json](https://api.purch.xyz/openapi.json) · Discovery at `/.well-known/x402`.
 
-All endpoints require an API key:
+## Payment
+
+The first request to any endpoint returns a `402 Payment Required` response with payment details; an x402-capable client (e.g. `@x402/fetch`) pays in USDC on Solana and retries automatically.
 
 ```bash
-curl -H "Authorization: Bearer pk_live_xxx" https://api.purch.ing/search?q=headphones
+# Returns 402 with payment instructions
+curl "https://api.purch.xyz/x402/search?q=wireless+headphones"
 ```
 
-## Examples
+```ts
+import { wrapFetchWithPayment } from "@x402/fetch";
 
-### Search Products
-
-```bash
-curl "https://api.purch.ing/search?q=wireless+headphones&priceMax=100" \
-  -H "Authorization: Bearer $API_KEY"
-```
-
-### AI Shopping Assistant
-
-```bash
-curl -X POST "https://api.purch.ing/shop" \
-  -H "Authorization: Bearer $API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": "I need comfortable running shoes under $150 with good arch support"
-  }'
+const fetchWithPay = wrapFetchWithPayment(fetch, signer);
+const res = await fetchWithPay("https://api.purch.xyz/x402/search?q=wireless+headphones");
 ```
 
 ### One-Command Checkout
 
 ```bash
-curl -X POST "https://api.purch.ing/buy" \
-  -H "Authorization: Bearer $API_KEY" \
+curl -X POST "https://api.purch.xyz/x402/buy" \
   -H "Content-Type: application/json" \
   -d '{
     "asin": "B0CXYZ1234",
@@ -76,22 +57,10 @@ curl -X POST "https://api.purch.ing/buy" \
   }'
 ```
 
-## Development
+The 402 quote equals the full product total (including tax and shipping). Once paid, Purch places the order and returns the order id and status.
 
-```bash
-bun dev          # Start with hot reload
-bun lint         # Check code style
-bun lint:fix     # Auto-fix issues
-bun typecheck    # TypeScript validation
-```
+## Links
 
-## Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `PORT` | Server port (default: 8080) |
-| `PURCH_BACKEND_URL` | Purch backend API URL |
-| `PURCH_BACKEND_AUDIENCE` | Cloud Run audience for backend ID token auth |
-| `API_KEYS` | Comma-separated list of valid API keys |
-| `TRACK17_API_KEY` | 17TRACK API security key (shipment tracking) |
-| `SLACK_WEBHOOK_URL` | Optional — notifies on each shipment tracking lookup |
+- [Purch](https://purch.xyz) — AI shopping concierge
+- [Docs](https://docs.purch.xyz)
+- [x402scan metrics](https://www.x402scan.com/server/ad1c686d-5f67-4160-ad50-72175071d9a7)
