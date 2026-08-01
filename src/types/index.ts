@@ -49,43 +49,6 @@ export interface ApiError {
 	details?: Record<string, unknown>;
 }
 
-export interface VaultCreator {
-	name: string;
-	type: "human" | "agent";
-	avatarUrl?: string;
-}
-
-export interface VaultItem {
-	id: string;
-	productType: "skill" | "knowledge" | "persona";
-	slug: string;
-	title: string;
-	cardDescription: string;
-	price: number;
-	category: string;
-	coverImageUrl: string | null;
-	creator: VaultCreator;
-	createdAt: string;
-	downloads: number;
-	featured: boolean;
-	boost: { active: boolean; expiresAt: string } | null;
-}
-
-export interface VaultItemDetail extends VaultItem {
-	tagline: string | null;
-	originalPrice: number | null;
-	discountPercent: number | null;
-	galleryImages: string[];
-	purchaseSubtitle: string | null;
-	purchaseHighlights: { icon: string; text: string }[];
-	detailHeading: string | null;
-	detailSubheading: string | null;
-	features: string[];
-	includedItems: { title: string; description: string; color: string }[];
-	includedSubtitle: string | null;
-	faq: { question: string; answer: string }[];
-}
-
 export interface TrackingEvent {
 	time: string | null;
 	description: string | null;

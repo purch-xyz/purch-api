@@ -68,7 +68,7 @@ function buildRouteConfig(): RoutesConfig {
 
 /**
  * Official x402 payment middleware with Coinbase facilitator.
- * Supports both static pricing (search, shop) and dynamic pricing (buy, vault/buy).
+ * Supports both static pricing (search, shop) and dynamic pricing (buy).
  */
 export const x402Middleware = paymentMiddleware(buildRouteConfig(), resourceServer);
 

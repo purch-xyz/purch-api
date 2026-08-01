@@ -1,5 +1,5 @@
 import { env } from "../config/env.js";
-import type { Product, ShippingAddress, VaultItem } from "../types/index.js";
+import type { Product, ShippingAddress } from "../types/index.js";
 
 interface SearchParams {
 	query: string;
@@ -60,47 +60,6 @@ interface BuyResult {
 		currency: string;
 	};
 	checkoutUrl: string;
-}
-
-interface VaultSearchParams {
-	search?: string;
-	category?: string;
-	productType?: string;
-	minPrice?: number;
-	maxPrice?: number;
-	cursor?: string;
-	limit?: number;
-}
-
-interface VaultSearchResult {
-	items: VaultItem[];
-	nextCursor: string | null;
-}
-
-interface VaultBuyParams {
-	slug: string;
-	walletAddress: string;
-	email: string;
-}
-
-interface VaultBuyResult {
-	purchaseId: string;
-	downloadToken: string;
-	serializedTransaction: string;
-	blockhash: string;
-	lastValidBlockHeight: number;
-	item: {
-		slug: string;
-		title: string;
-		productType: "skill" | "knowledge" | "persona";
-		price: number;
-		coverImageUrl: string | null;
-	} | null;
-	payment: {
-		amountMicroUsdc: string;
-		amountUsdc: string;
-		network: "solana";
-	};
 }
 
 class PurchClient {
@@ -249,33 +208,6 @@ class PurchClient {
 	}
 
 	/**
-	 * Search vault items (skills, knowledge bases, personas).
-	 */
-	async vaultSearch(params: VaultSearchParams): Promise<VaultSearchResult> {
-		const searchParams = new URLSearchParams();
-		if (params.search) searchParams.set("search", params.search);
-		if (params.category) searchParams.set("category", params.category);
-		if (params.productType) searchParams.set("productType", params.productType);
-		if (params.minPrice !== undefined) searchParams.set("minPrice", params.minPrice.toString());
-		if (params.maxPrice !== undefined) searchParams.set("maxPrice", params.maxPrice.toString());
-		if (params.cursor) searchParams.set("cursor", params.cursor);
-		if (params.limit !== undefined) searchParams.set("limit", params.limit.toString());
-
-		return this.request<VaultSearchResult>(`/api/vault?${searchParams}`);
-	}
-
-	/**
-	 * Initiate a vault item purchase.
-	 * Returns purchase intent + serialized USDC transaction for signing.
-	 */
-	async vaultBuy(params: VaultBuyParams): Promise<VaultBuyResult> {
-		return this.request<VaultBuyResult>("/api/public/vault/purchase", {
-			method: "POST",
-			body: JSON.stringify(params),
-		});
-	}
-
-	/**
 	 * Fulfill an order by signing and submitting the Crossmint payment server-side.
 	 * Used after x402 dynamic pricing payment is verified.
 	 * Retries on 5xx errors since the backend instance may be recycled mid-request.
@@ -295,64 +227,6 @@ class PurchClient {
 			}
 		}
 		throw lastError;
-	}
-
-	/**
-	 * Create a vault purchase with payment already handled by x402.
-	 * Creates purchase intent and marks it as verified immediately.
-	 */
-	async vaultBuyX402(params: {
-		slug: string;
-		walletAddress: string;
-		email: string;
-		x402TxSignature: string;
-	}): Promise<{
-		purchaseId: string;
-		downloadToken: string;
-		item: {
-			slug: string;
-			title: string;
-			productType: string;
-			price: number;
-			coverImageUrl: string | null;
-		} | null;
-	}> {
-		return this.request("/api/public/vault/purchase/x402", {
-			method: "POST",
-			body: JSON.stringify(params),
-		});
-	}
-
-	/**
-	 * Download a vault item file. Returns the raw response for streaming.
-	 * Automatically verifies on-chain payment if not yet verified.
-	 */
-	async vaultDownload(
-		purchaseId: string,
-		downloadToken: string,
-		txSignature?: string,
-	): Promise<Response> {
-		const params = new URLSearchParams({ downloadToken });
-		if (txSignature) params.set("txSignature", txSignature);
-		const url = `${this.baseUrl}/api/public/vault/download/${purchaseId}?${params}`;
-		const headers = await this.buildInternalHeaders(undefined, { includeJsonContentType: false });
-
-		const response = await fetch(url, {
-			headers,
-		});
-
-		if (!response.ok) {
-			const error = (await response.json().catch(() => ({}))) as {
-				error?: string;
-				message?: string;
-			};
-			const message = error.error || error.message || "Download failed";
-			const apiError = new Error(message) as Error & { status: number };
-			apiError.status = response.status;
-			throw apiError;
-		}
-
-		return response;
 	}
 }
 

@@ -3,13 +3,7 @@ import { SOLANA_MAINNET_CAIP2 } from "@x402/svm";
 import { env } from "../config/env.js";
 import { purchClient } from "../services/purch.js";
 import type { ShippingAddress } from "../types/index.js";
-import {
-	getCachedOrder,
-	getCachedVaultItem,
-	hashBody,
-	setCachedOrder,
-	setCachedVaultItem,
-} from "./order-cache.js";
+import { getCachedOrder, hashBody, setCachedOrder } from "./order-cache.js";
 
 export const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 
@@ -193,77 +187,6 @@ export const PAYABLE_ROUTES: PayableRoute[] = [
 			},
 		},
 	},
-	{
-		path: "/x402/vault/search",
-		method: "GET",
-		price: "0.01",
-		description: "Search vault items (skills, knowledge, personas)",
-		bazaar: {
-			input: { q: "marketing automation" },
-			inputSchema: {
-				properties: {
-					q: { type: "string", description: "Search query" },
-					category: {
-						type: "string",
-						description: "Filter by category",
-						enum: ["marketing", "development", "automation", "career", "ios", "productivity"],
-					},
-					productType: {
-						type: "string",
-						description: "Filter by type",
-						enum: ["skill", "knowledge", "persona"],
-					},
-					minPrice: { type: "integer", description: "Minimum price in USDC (whole units)" },
-					maxPrice: { type: "integer", description: "Maximum price in USDC (whole units)" },
-					cursor: { type: "string", description: "Pagination cursor (UUID)" },
-					limit: { type: "integer", description: "Items per page (1-100, default 30)" },
-				},
-			},
-			output: {
-				example: {
-					items: [
-						{
-							slug: "marketing-automation-pro",
-							title: "Marketing Automation Pro",
-							productType: "skill",
-							price: 5,
-							category: "marketing",
-						},
-					],
-					nextCursor: null,
-				},
-			},
-		},
-	},
-	{
-		path: "/x402/vault/download",
-		method: "GET",
-		price: "0.01",
-		description:
-			"Download purchased vault item file. URL: /x402/vault/download/:purchaseId?downloadToken=...&txSignature=...",
-		bazaar: {
-			input: {
-				purchaseId: "550e8400-e29b-41d4-a716-446655440000",
-				downloadToken: "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-			},
-			inputSchema: {
-				properties: {
-					purchaseId: { type: "string", description: "Purchase ID (UUID) — path parameter" },
-					downloadToken: {
-						type: "string",
-						description: "Secret download token from buy response",
-					},
-					txSignature: {
-						type: "string",
-						description:
-							"On-chain tx signature. Required for first download, optional for re-downloads.",
-					},
-				},
-				required: ["purchaseId", "downloadToken"],
-			},
-			output: { example: "binary file download (ZIP)" },
-		},
-	},
 ];
 
 /**
@@ -315,47 +238,6 @@ async function getBuyPrice(context: {
 	});
 
 	return `$${markedUpPrice}`;
-}
-
-/**
- * Dynamic price function for /x402/vault/buy.
- * Looks up the vault item price from the backend.
- */
-async function getVaultBuyPrice(context: {
-	adapter: { getBody: () => Promise<unknown> };
-}): Promise<string> {
-	const body = await context.adapter.getBody();
-	if (!body || typeof body !== "object") {
-		return "$0.01";
-	}
-
-	const bodyHash = hashBody(body);
-	const cached = getCachedVaultItem(bodyHash);
-	if (cached) {
-		return `$${cached.price}`;
-	}
-
-	const typedBody = body as { slug?: string };
-	if (!typedBody.slug) {
-		return "$0.01";
-	}
-
-	// Search for the vault item to get its price
-	const searchResult = await purchClient.vaultSearch({ search: typedBody.slug, limit: 1 });
-	const item = searchResult.items.find((i) => i.slug === typedBody.slug);
-
-	if (!item) {
-		return "$0.01"; // will fail in handler
-	}
-
-	setCachedVaultItem(bodyHash, {
-		slug: item.slug,
-		price: item.price,
-		title: item.title,
-		productType: item.productType,
-	});
-
-	return `$${item.price}`;
 }
 
 /**
@@ -431,40 +313,6 @@ export const DYNAMIC_ROUTE_CONFIG: Record<
 					status: "processing",
 					product: { title: "Wireless Headphones", price: { amount: "79.99", currency: "USD" } },
 					totalPrice: { amount: "84.99", currency: "USD" },
-				},
-			},
-		},
-	},
-	"POST /x402/vault/buy": {
-		accepts: {
-			scheme: "exact",
-			price: getVaultBuyPrice,
-			network: SOLANA_MAINNET_CAIP2,
-			payTo: env.X402_PAYTO_ADDRESS,
-		},
-		description: "Purchase a vault item — price equals the item price (dynamic)",
-		mimeType: "application/json",
-		maxTimeoutSeconds: 120,
-		bazaar: {
-			input: {
-				slug: "marketing-automation-pro",
-				walletAddress: "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU",
-				email: "agent@example.com",
-			},
-			inputSchema: {
-				properties: {
-					slug: { type: "string", description: "Vault item slug to purchase" },
-					walletAddress: { type: "string", description: "Solana wallet address (base58)" },
-					email: { type: "string", description: "Email for purchase confirmation" },
-				},
-				required: ["slug", "walletAddress", "email"],
-			},
-			bodyType: "json",
-			output: {
-				example: {
-					purchaseId: "550e8400-e29b-41d4-a716-446655440000",
-					downloadToken: "e3b0c44298fc1c149afbf4c8996fb924...",
-					item: { slug: "marketing-automation-pro", title: "Marketing Automation Pro", price: 5 },
 				},
 			},
 		},

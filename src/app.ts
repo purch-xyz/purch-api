@@ -6,11 +6,8 @@ import { errorHandler } from "./middleware/error.js";
 import { rateLimit } from "./middleware/rateLimit.js";
 import { searchRouter } from "./routes/search.js";
 import { shopRouter } from "./routes/shop.js";
-import { vaultDownloadRouter } from "./routes/vault-download.js";
-import { vaultSearchRouter } from "./routes/vault-search.js";
 import { x402BuyRouter } from "./routes/x402-buy.js";
 import { x402TrackRouter } from "./routes/x402-track.js";
-import { x402VaultBuyRouter } from "./routes/x402-vault-buy.js";
 import { PAYABLE_ROUTES } from "./x402/config.js";
 import { handle402Probe, handleDynamic402Probe, x402Middleware } from "./x402/middleware.js";
 
@@ -83,20 +80,18 @@ app.get("/health", (c) =>
 app.use("/search/*", rateLimit({ windowMs: 60 * 1000, maxRequests: 60 }));
 app.use("/shop/*", rateLimit({ windowMs: 60 * 1000, maxRequests: 60 }));
 app.use("/buy/*", rateLimit({ windowMs: 60 * 1000, maxRequests: 60 }));
-app.use("/vault/*", rateLimit({ windowMs: 60 * 1000, maxRequests: 60 }));
 
 // x402 rate limiting (60 req/min per IP)
 app.use("/x402/*", rateLimit({ windowMs: 60 * 1000, maxRequests: 60 }));
 
 // x402 payment middleware — verifies and settles payments via Coinbase facilitator
-// Handles both static pricing (search, shop) and dynamic pricing (buy, vault/buy)
+// Handles both static pricing (search, shop) and dynamic pricing (buy)
 app.use("/x402/*", x402Middleware);
 
 // GET probe handlers for POST-only x402 routes (x402scan probes both GET and POST)
 const shopRoute = PAYABLE_ROUTES.find((r) => r.path === "/x402/shop")!;
 app.get("/x402/shop", (c) => handle402Probe(c, shopRoute));
 app.get("/x402/buy", (c) => handleDynamic402Probe(c, "POST /x402/buy"));
-app.get("/x402/vault/buy", (c) => handleDynamic402Probe(c, "POST /x402/vault/buy"));
 
 // POST probe handlers for dynamic-priced routes: x402 middleware fails on empty body
 // (dynamic price function can't compute without a body), so return 402 manually
@@ -106,37 +101,14 @@ app.use("/x402/buy", async (c, next) => {
 	}
 	return next();
 });
-app.use("/x402/vault/buy", async (c, next) => {
-	if (c.req.method === "POST" && !c.req.header("x-payment") && !c.req.header("payment-signature")) {
-		return handleDynamic402Probe(c, "POST /x402/vault/buy");
-	}
-	return next();
-});
-
-// Vault/download 402 probe: x402 middleware can't match parameterized paths,
-// so return 402 manually when no payment header is present (before route validation)
-const vaultDownloadRoute = PAYABLE_ROUTES.find((r) => r.path === "/x402/vault/download")!;
-app.use("/x402/vault/download/:purchaseId", async (c, next) => {
-	if (!c.req.header("x-payment") && !c.req.header("payment-signature")) {
-		return handle402Probe(c, vaultDownloadRoute);
-	}
-	return next();
-});
-
 // x402 routes (gated by x402 middleware above)
 app.route("/x402/search", searchRouter);
 app.route("/x402/shop", shopRouter);
 app.route("/x402/buy", x402BuyRouter); // dynamic pricing — product price
 app.route("/x402/track", x402TrackRouter);
-app.route("/x402/vault/search", vaultSearchRouter);
-app.route("/x402/vault/buy", x402VaultBuyRouter); // dynamic pricing — item price
-app.route("/x402/vault/download", vaultDownloadRouter);
 
 // Dynamic pricing route paths (for OpenAPI augmentation)
-const DYNAMIC_PRICING_ROUTES = [
-	{ path: "/x402/buy", method: "POST" },
-	{ path: "/x402/vault/buy", method: "POST" },
-];
+const DYNAMIC_PRICING_ROUTES = [{ path: "/x402/buy", method: "POST" }];
 
 // Custom OpenAPI spec with x402 extensions
 app.get("/openapi.json", (c) => {
@@ -146,30 +118,26 @@ app.get("/openapi.json", (c) => {
 			title: "Purch",
 			version: "1.0.0",
 			description:
-				"Search and buy products on Amazon and Shopify, and skills, knowledge or personas in Purch Vault. All endpoints are payable via the x402 protocol (USDC on Solana).",
+				"Search and buy products on Amazon and Shopify, and track shipments across 3,400+ carriers. All endpoints are payable via the x402 protocol (USDC on Solana).",
 			guidance: `Purch lets AI agents search for products and purchase them using x402 micropayments (USDC on Solana).
 
 ## Quick Start
 1. Search for products: GET /x402/search?q=headphones
 2. Or use natural language: POST /x402/shop with {"message": "comfortable running shoes under $150"}
 3. Buy a product: POST /x402/buy with the ASIN or product URL, shipping address, and email
-4. Browse digital goods: GET /x402/vault/search
-5. Buy digital goods: POST /x402/vault/buy with the item slug
 
 ## Payment
 All endpoints require x402 payment. On first request you'll receive a 402 response with payment details.
 Your x402 client handles payment automatically — no wallet setup or transaction signing needed.
 
 ## Pricing
-- Search endpoints (GET /x402/search, GET /x402/vault/search): $0.01 per call
+- Search endpoint (GET /x402/search): $0.01 per call
 - AI shopping assistant (POST /x402/shop): $0.10 per call
 - Product purchases (POST /x402/buy): dynamic — equals the product total (including tax/shipping)
-- Vault purchases (POST /x402/vault/buy): dynamic — equals the item price in USDC
 
 ## Product Identification
 - Amazon products: use "asin" (e.g. "B0CXYZ1234") or "productUrl" (e.g. "https://amazon.com/dp/B0CXYZ1234")
-- Shopify products: use "productUrl" + "variantId"
-- Vault items: use "slug" (e.g. "marketing-automation-pro")`,
+- Shopify products: use "productUrl" + "variantId"`,
 			contact: {
 				name: "Purch Support",
 				url: "https://purch.xyz",
@@ -180,8 +148,7 @@ Your x402 client handles payment automatically — no wallet setup or transactio
 			{ name: "Search", description: "Product search endpoints" },
 			{ name: "Shop", description: "AI-powered shopping assistant" },
 			{ name: "Buy", description: "Checkout and order management" },
-			{ name: "Track", description: "Shipment tracking across ~2,500 carriers" },
-			{ name: "Vault", description: "AI skills, knowledge bases, and personas marketplace" },
+			{ name: "Track", description: "Shipment tracking across 3,400+ carriers" },
 		],
 	};
 
@@ -287,15 +254,7 @@ Your x402 client handles payment automatically — no wallet setup or transactio
 app.get("/.well-known/x402", (c) =>
 	c.json({
 		version: 1,
-		resources: [
-			"GET /x402/search",
-			"POST /x402/shop",
-			"POST /x402/buy",
-			"GET /x402/track",
-			"GET /x402/vault/search",
-			"POST /x402/vault/buy",
-			"GET /x402/vault/download/{purchaseId}",
-		],
+		resources: ["GET /x402/search", "POST /x402/shop", "POST /x402/buy", "GET /x402/track"],
 	}),
 );
 
@@ -307,7 +266,7 @@ app.get("/docs", (c) => {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Search and buy products on Amazon and Shopify, track shipments across 2,500 carriers, and get skills, knowledge or personas in Purch Vault" />
+    <meta name="description" content="Search and buy products on Amazon and Shopify, and track shipments across 3,400+ carriers" />
     <title>Purch</title>
   </head>
   <body>
